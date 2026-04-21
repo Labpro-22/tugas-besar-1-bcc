@@ -1,4 +1,5 @@
-#pragma once
+#ifndef MONEY_HPP
+#define MONEY_HPP
 
 #include <string>
 using namespace std;
@@ -33,3 +34,5 @@ class Money {
     private:
         int amount;
 };
+
+#endif
