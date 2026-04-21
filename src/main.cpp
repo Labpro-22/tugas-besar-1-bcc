@@ -6,6 +6,14 @@
 
 #include <SFML/Graphics.hpp>
 
+#include <cstdlib>
+
+#if NIMONSPOLY_ENABLE_SFML
+#include "ui/GUIInput.hpp"
+#include "ui/GUIView.hpp"
+
+#include <SFML/Graphics.hpp>
+
 #include <optional>
 #endif
 
@@ -19,7 +27,7 @@ int main() {
 
     // Temporary GUI smoke test loop. GameEngine integration comes later.
     while (window.isOpen()) {
-        while (const optional<sf::Event> event = window.pollEvent()) {
+        while (const std::optional<sf::Event> event = window.pollEvent()) {
             if (event->is<sf::Event::Closed>()) {
                 window.close();
             }
