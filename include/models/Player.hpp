@@ -15,7 +15,7 @@ class Effect;
 
 class Player {
 public:
-    static constexpr int MAX_SKILL_CARDS = 2;
+    static constexpr int MAX_SKILL_CARDS = 3;
 
     Player(const std::string& username, Money startingMoney, PlayerController* controller);
     ~Player();
