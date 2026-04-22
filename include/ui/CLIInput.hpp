@@ -1,14 +1,14 @@
 #pragma once
 
+#include <istream>
+#include <ostream>
+#include <string>
+
 #include "ui/IGameInput.hpp"
 
-namespace sf {
-class RenderWindow;
-}
-
-class GUIInput final : public IGameInput {
+class CLIInput final : public IGameInput {
 public:
-    explicit GUIInput(sf::RenderWindow& window);
+    CLIInput(std::istream& in = std::cin, std::ostream& out = std::cout);
 
     int    getPlayerCount() override;
     string getPlayerName(int playerIdx) override;
@@ -30,5 +30,9 @@ public:
     string    getPropertyCodeInput(const string& prompt) override;
 
 private:
-    [[maybe_unused]] sf::RenderWindow* window;
+    std::istream& in_;
+    std::ostream& out_;
+
+    string readLine();
+    int    readInt();
 };

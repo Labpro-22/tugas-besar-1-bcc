@@ -1,14 +1,13 @@
 #pragma once
 
+#include <ostream>
+#include <string>
+
 #include "ui/IGameView.hpp"
 
-namespace sf {
-class RenderWindow;
-}
-
-class GUIView final : public IGameView {
+class CLIView final : public IGameView {
 public:
-    explicit GUIView(sf::RenderWindow& window);
+    explicit CLIView(std::ostream& out = std::cout);
 
     void showMainMenu() override;
     void showPlayerOrder(const vector<string>& orderedNames) override;
@@ -56,5 +55,5 @@ public:
     void showMessage(const string& message) override;
 
 private:
-    [[maybe_unused]] sf::RenderWindow* window;
+    std::ostream& out_;
 };

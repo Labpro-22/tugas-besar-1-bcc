@@ -6,7 +6,8 @@
 class Player;
 class PropertyTile;
 
-struct FestivalResult {
+class FestivalResult{
+public:
     bool applied;        // false if has 3 festival applications
     int  multiplier;     // 2/4/8
     int  turnsGranted;

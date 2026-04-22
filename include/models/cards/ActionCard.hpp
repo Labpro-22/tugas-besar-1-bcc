@@ -6,7 +6,7 @@
 #include "models/cards/CardResult.hpp"
 
 class Player;
-struct GameContext;
+class GameContext;
 
 class ActionCard : public Card {
     public:

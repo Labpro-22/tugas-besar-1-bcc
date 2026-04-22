@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <string>
 #include <vector>
 
@@ -7,73 +8,156 @@
 #include "utils/Enums.hpp"
 #include "utils/Structs.hpp"
 
-// Lightweight DTOs for UI layer.
-// Keep these free from heavy model includes to avoid circular dependencies.
 
-struct PropertyInfo {
+class PropertyInfo{
+public:
     string code;
     string name;
-    string ownerName;  // empty if BANK
+    string ownerName;
     PropertyStatus status{PropertyStatus::BANK};
+    TileType type{TileType::STREET};
+    Color colorGroup{Color::DEFAULT};
     int buildingLevel{0};
     Money purchasePrice{0};
+    Money mortgageValue{0};
+    int buildCostPerHouse{0};
+    int buildCostHotel{0};
+    array<int, 6> rentTable{};
+    int festivalMultiplier{1};
+    int festivalDurationLeft{0};
 };
 
-struct RentInfo {
+
+class RentInfo{
+public:
     string payerName;
     string ownerName;
     Money amount{0};
     PropertyInfo property;
+    int buildingLevel{0};
+    bool festivalActive{false};
+    Money payerBefore{0};
+    Money payerAfter{0};
+    Money ownerBefore{0};
+    Money ownerAfter{0};
 };
 
-struct TaxInfo {
+
+class TaxInfo{
+public:
+    TileType taxType{TileType::TAX_PPH};
     int flatAmount{0};
+    int percentageRate{0};
+    int cashWealth{0};
+    int propertyWealth{0};
+    int buildingWealth{0};
+    int totalWealth{0};
     int percentageAmount{0};
 };
 
-struct AuctionState {
+
+class AuctionState{
+public:
     int currentBid{0};
     string highestBidderName;
+    string currentBidderName;
     vector<string> participantNames;
     PropertyInfo property;
 };
 
-struct BankruptcyInfo {
+class AuctionSummary{
+public:
+    PropertyInfo property;
+    string winnerName;
+    int finalBid{0};
+    bool noWinner{false};
+};
+
+
+class FestivalEffectInfo{
+public:
+    string propertyCode;
+    string propertyName;
+    int previousMultiplier{1};
+    int newMultiplier{1};
+    int durationTurns{3};
+};
+
+
+class BankruptcyInfo{
+public:
     string playerName;
     Money obligation{0};
-    string creditorName;  // empty if BANK
+    string creditorName;
+    bool creditorIsBank{false};
+    vector<PropertyInfo> transferredAssets;
+    Money transferredCash{0};
 };
 
-struct LiquidationState {
+class LiquidationState{
+public:
     Money obligation{0};
     Money maxLiquidation{0};
-    vector<string> options;
+    Money currentBalance{0};
+    vector<LiquidationOption> options;
 };
 
-struct CardInfo {
+
+class CardInfo{
+public:
     string name;
     string description;
     string type;
+    int value{0};
+    int durationLeft{0};
 };
 
-struct WinnerInfo {
-    vector<string> winners;
-};
-
-struct JailInfo {
+class CardEffectInfo{
+public:
+    string cardType;
     string playerName;
-    int turnsRemaining{0};
+    string detail;
+};
+
+
+class JailEntryInfo{
+public:
+    string playerName;
+    JailEntryReason reason;
+};
+
+class JailInfo{
+public:
+    string playerName;
+    int turnsInJail{0};
+    int escapeAttemptsLeft{3};
+    bool hasEscapeCard{false};
     int fine{0};
 };
 
-struct BuildMenuState {
-    vector<string> options;
+
+class BuildMenuState{
+public:
+    vector<ColorGroupBuildOption> groups;
+    Money playerMoney;
 };
 
-struct MortgageMenuState {
-    vector<string> options;
+class MortgageMenuState{
+public:
+    vector<MortgageOption> options;
+    Money playerMoney;
 };
 
-struct RedeemMenuState {
-    vector<string> options;
+class RedeemMenuState{
+public:
+    vector<RedeemOption> options;
+    Money playerMoney;
+};
+
+
+class WinnerInfo{
+public:
+    vector<string> winners;
+    vector<PlayerSummary> players;
+    string winCondition;
 };

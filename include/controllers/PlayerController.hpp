@@ -15,7 +15,7 @@ public:
     virtual string chooseCommand(const GameStateView& state) = 0;
 
     virtual bool decideBuyProperty(const PropertyInfo& info, Money money) = 0;
-    virtual AuctionAction decideAuction(int currentBid, Money money) = 0;
+    virtual AuctionDecision decideAuction(int currentBid, Money money) = 0;
     virtual TaxChoice decideTax(int flatAmount, int percentAmount) = 0;
 
     virtual int decideSkillCard(const vector<CardInfo>& cards) = 0;

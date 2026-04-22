@@ -2,12 +2,19 @@
 
 GUIInput::GUIInput(sf::RenderWindow& window) : window(&window) {}
 
+int GUIInput::getPlayerCount() { return 2; }
+
+string GUIInput::getPlayerName(int playerIdx) {
+    (void)playerIdx;
+    return string{};
+}
+
+string GUIInput::getCommand() { return string{}; }
+
 int GUIInput::getMenuChoice(const vector<string>& options) {
     (void)options;
     return 0;
 }
-
-string GUIInput::getCommand() { return string{}; }
 
 bool GUIInput::getYesNo(const string& prompt) {
     (void)prompt;
@@ -16,7 +23,6 @@ bool GUIInput::getYesNo(const string& prompt) {
 
 int GUIInput::getNumberInRange(const string& prompt, int min, int max) {
     (void)prompt;
-    (void)min;
     (void)max;
     return min;
 }
@@ -28,12 +34,12 @@ string GUIInput::getString(const string& prompt) {
 
 pair<int, int> GUIInput::getManualDice() { return {1, 1}; }
 
-AuctionAction GUIInput::getAuctionAction(
+AuctionDecision GUIInput::getAuctionDecision(
     const string& playerName, int currentBid, int playerMoney) {
     (void)playerName;
     (void)currentBid;
     (void)playerMoney;
-    return AuctionAction::PASS;
+    return AuctionDecision{AuctionAction::PASS, 0};
 }
 
 TaxChoice GUIInput::getTaxChoice() { return TaxChoice::FLAT; }

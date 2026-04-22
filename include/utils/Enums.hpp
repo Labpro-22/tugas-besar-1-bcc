@@ -82,6 +82,17 @@ enum class AuctionAction : uint8_t {
     PASS,
 };
 
+enum class LiquidationType : uint8_t {
+    SELL,
+    MORTGAGE,
+};
+
+enum class JailEntryReason : uint8_t {
+    GO_TO_JAIL_TILE,
+    TRIPLE_DOUBLE,
+    CHANCE_CARD,
+};
+
 enum class AILevel : uint8_t {
     BASIC,
     SMART,

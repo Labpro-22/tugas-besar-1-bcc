@@ -1,6 +1,7 @@
 #include <cstdlib>
 
 #if NIMONSPOLY_ENABLE_SFML
+#include "core/state/header/GameStateView.hpp"
 #include "ui/GUIInput.hpp"
 #include "ui/GUIView.hpp"
 
@@ -16,6 +17,7 @@ int main() {
 
     GUIView view(window);
     GUIInput input(window);
+    GameStateView demoState;
 
     // Temporary GUI smoke test loop. GameEngine integration comes later.
     while (window.isOpen()) {
@@ -25,8 +27,7 @@ int main() {
             }
         }
 
-        window.clear(sf::Color(30, 30, 30));
-        window.display();
+        view.showBoard(demoState);
     }
 
     return EXIT_SUCCESS;
