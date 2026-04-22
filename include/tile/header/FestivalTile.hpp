@@ -1,14 +1,12 @@
-#ifndef FESTIVAL_TILE_HPP
-#define FESTIVAL_TILE_HPP
+#ifndef TILE_HEADER_FESTIVAL_TILE_HPP
+#define TILE_HEADER_FESTIVAL_TILE_HPP
 
-#include "ActionTile.hpp"
+#include "tile/header/ActionTile.hpp"
+#include "utils/Enums.hpp"
 
 class FestivalTile : public ActionTile {
 public:
-
-private:
-
-protected:
+	FestivalTile(int id, const std::string& code, const std::string& name);
 };
 
 #endif
