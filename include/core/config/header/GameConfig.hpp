@@ -24,6 +24,7 @@ public:
 	void setJailFine(int value);
 	void setTaxConfig(int pphFlatValue, int pphPercentageValue, int pbmFlatValue);
 	void setSpecialConfig(int goSalaryValue, int jailFineValue);
+	bool loadFromDirectory(const char* directory);
 
 private:
 	int playerCount;

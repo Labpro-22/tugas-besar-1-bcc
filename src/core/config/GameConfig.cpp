@@ -1,6 +1,8 @@
 #include "core/config/header/GameConfig.hpp"
 
 #include <algorithm>
+#include <fstream>
+#include <string>
 
 GameConfig::GameConfig()
 	: playerCount(4), maxTurns(100), startingMoney(1000000), pphFlat(50000), pphPercentage(10), pbmFlat(50000),
@@ -79,4 +81,50 @@ void GameConfig::setTaxConfig(int pphFlatValue, int pphPercentageValue, int pbmF
 void GameConfig::setSpecialConfig(int goSalaryValue, int jailFineValue) {
 	setGoSalary(goSalaryValue);
 	setJailFine(jailFineValue);
+}
+
+bool GameConfig::loadFromDirectory(const char* directory) {
+	const std::string base = directory ? directory : "config";
+	bool loadedAny = false;
+
+	{
+		std::ifstream file(base + "/misc.txt");
+		std::string header;
+		int maxTurnValue = 0;
+		int startingMoneyValue = 0;
+		if (file >> header) {
+			std::string secondHeader;
+			file >> secondHeader;
+			if (file >> maxTurnValue >> startingMoneyValue) {
+				setMaxTurns(maxTurnValue);
+				setStartingMoney(startingMoneyValue);
+				loadedAny = true;
+			}
+		}
+	}
+
+	{
+		std::ifstream file(base + "/tax.txt");
+		std::string h1, h2, h3;
+		int pphFlatValue = 0;
+		int pphPercentageValue = 0;
+		int pbmFlatValue = 0;
+		if (file >> h1 >> h2 >> h3 >> pphFlatValue >> pphPercentageValue >> pbmFlatValue) {
+			setTaxConfig(pphFlatValue, pphPercentageValue, pbmFlatValue);
+			loadedAny = true;
+		}
+	}
+
+	{
+		std::ifstream file(base + "/special.txt");
+		std::string h1, h2;
+		int goSalaryValue = 0;
+		int jailFineValue = 0;
+		if (file >> h1 >> h2 >> goSalaryValue >> jailFineValue) {
+			setSpecialConfig(goSalaryValue, jailFineValue);
+			loadedAny = true;
+		}
+	}
+
+	return loadedAny;
 }
