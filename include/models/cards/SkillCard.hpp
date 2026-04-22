@@ -7,7 +7,7 @@
 #include "utils/Enums.hpp"
 
 class Player;
-struct GameContext;
+class GameContext;
 
 class SkillCard : public Card {
     public:
