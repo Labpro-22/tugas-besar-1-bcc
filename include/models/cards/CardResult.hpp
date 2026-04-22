@@ -24,7 +24,8 @@ enum class CardResultAction : uint8_t {
     DEMOLISH_PROPERTY,
 };
 
-struct CardResult {
+class CardResult {
+public:
     bool success{true};
     std::string message;
     CardResultAction action{CardResultAction::NONE};

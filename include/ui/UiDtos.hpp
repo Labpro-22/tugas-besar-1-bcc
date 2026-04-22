@@ -5,12 +5,13 @@
 
 #include "models/Money.hpp"
 #include "utils/Enums.hpp"
-#include "utils/Structs.hpp"
+#include "utils/Types.hpp"
 
 // Lightweight DTOs for UI layer.
 // Keep these free from heavy model includes to avoid circular dependencies.
 
-struct PropertyInfo {
+class PropertyInfo {
+public:
     string code;
     string name;
     string ownerName;  // empty if BANK
@@ -19,61 +20,72 @@ struct PropertyInfo {
     Money purchasePrice{0};
 };
 
-struct RentInfo {
+class RentInfo {
+public:
     string payerName;
     string ownerName;
     Money amount{0};
     PropertyInfo property;
 };
 
-struct TaxInfo {
+class TaxInfo {
+public:
     int flatAmount{0};
     int percentageAmount{0};
 };
 
-struct AuctionState {
+class AuctionState {
+public:
     int currentBid{0};
     string highestBidderName;
     vector<string> participantNames;
     PropertyInfo property;
 };
 
-struct BankruptcyInfo {
+class BankruptcyInfo {
+public:
     string playerName;
     Money obligation{0};
     string creditorName;  // empty if BANK
 };
 
-struct LiquidationState {
+class LiquidationState {
+public:
     Money obligation{0};
     Money maxLiquidation{0};
     vector<string> options;
 };
 
-struct CardInfo {
+class CardInfo {
+public:
     string name;
     string description;
     string type;
 };
 
-struct WinnerInfo {
+class WinnerInfo {
+public:
     vector<string> winners;
 };
 
-struct JailInfo {
+class JailInfo {
+public:
     string playerName;
     int turnsRemaining{0};
     int fine{0};
 };
 
-struct BuildMenuState {
+class BuildMenuState {
+public:
     vector<string> options;
 };
 
-struct MortgageMenuState {
+class MortgageMenuState {
+public:
     vector<string> options;
 };
 
-struct RedeemMenuState {
+class RedeemMenuState {
+public:
     vector<string> options;
 };

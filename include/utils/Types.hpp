@@ -7,6 +7,7 @@
 #include "utils/Enums.hpp"
 
 
+// prevent circular includes
 class Bank;
 class FestivalManager;
 class TransactionLogger;
@@ -16,7 +17,8 @@ class Player;
 class Board;
 class PropertyTile;
 
-struct GameContext {
+class GameContext {
+public:
     Bank& bank;
     FestivalManager& festivalManager;
     TransactionLogger& logger;
@@ -27,34 +29,39 @@ struct GameContext {
     int currentTurn;
 };
 
-struct LandingResult {
+class LandingResult {
+public:
     LandingAction action;
     int amount;
     Player* creditor;
     PropertyTile* property;
 };
 
-struct LogEntry {
+class LogEntry {
+public:
     int turn;
     string username;
     string actionType;
     string detail;
 };
 
-struct AuctionResult {
+class AuctionResult {
+public:
     Player* winner;
     int finalPrice;
     PropertyTile* property;
 };
 
-struct FestivalEffect {
+class FestivalEffect {
+public:
     Player* owner;
     int multiplier;
     int turnsRemaining;
     int timesApplied;
 };
 
-struct PlayerView {
+class PlayerView {
+public:
     string username;
     Money money;
     int position;
@@ -63,7 +70,8 @@ struct PlayerView {
     int skillCardCount;
 };
 
-struct PropertyView {
+class PropertyView {
+public:
     string code;
     string name;
     string ownerName;
