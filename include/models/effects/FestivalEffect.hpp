@@ -2,7 +2,7 @@
 #define FESTIVALEFFECT_HPP
 #include "models/effects/Effect.hpp"
 
-// Named FestivalRentEffect to avoid collision with global struct FestivalEffect (utils/Structs.hpp).
+// Named FestivalRentEffect to avoid collision with global class FestivalEffect (utils/Types.hpp).
 class FestivalRentEffect : public Effect {
 public:
     FestivalRentEffect(int multiplier, int turns);

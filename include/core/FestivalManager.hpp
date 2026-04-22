@@ -1,15 +1,22 @@
 #ifndef FESTIVALMANAGER_HPP
 #define FESTIVALMANAGER_HPP
 #include <map>
-#include "utils/Structs.hpp"
 
 class Player;
 class PropertyTile;
 
-struct FestivalResult {
-    bool applied;        // false if has 3 festival applications
-    int  multiplier;     // 2/4/8
-    int  turnsGranted;
+class FestivalResult {
+public:
+    FestivalResult(bool applied, int multiplier, int turnsGranted);
+
+    bool isApplied() const;
+    int getMultiplier() const;
+    int getTurnsGranted() const;
+
+private:
+    bool applied;
+    int multiplier;
+    int turnsGranted;
 };
 
 class FestivalManager {
@@ -24,9 +31,30 @@ public:
     bool hasActiveEffect(PropertyTile* property) const;
 
 private:
+    class FestivalPropertyEffect {
+    public:
+        FestivalPropertyEffect();
+
+        Player* getOwner() const;
+        int getMultiplier() const;
+        int getTurnsRemaining() const;
+        int getTimesApplied() const;
+
+        void setOwner(Player* owner);
+        void setMultiplier(int value);
+        void setTurnsRemaining(int value);
+        void setTimesApplied(int value);
+
+    private:
+        Player* owner;
+        int multiplier;
+        int turnsRemaining;
+        int timesApplied;
+    };
+
     static int multiplierFor(int timesApplied);
 
-    std::map<PropertyTile*, FestivalEffect> activeEffects;
+    std::map<PropertyTile*, FestivalPropertyEffect> activeEffects;
 };
 
 #endif
