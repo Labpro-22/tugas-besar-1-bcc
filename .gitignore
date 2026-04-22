@@ -46,3 +46,7 @@ bin/
 
 # mac type shi
 *.DS_Store
+
+# Docs / Specs (should not be committed)
+*.pdf
+OOPClassDesign.md
