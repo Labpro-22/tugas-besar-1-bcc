@@ -7,6 +7,9 @@
 #include "models/cards/CommunityChestCard.hpp"
 #include "models/cards/SkillCard.hpp"
 
+class GameContext;
+class Player;
+
 class CardSystem {
     public:
         CardSystem();
@@ -27,6 +30,7 @@ class CardSystem {
         void discardSkill(std::unique_ptr<SkillCard> card);
 
         void initializeDecks();
+        static CardResult applyImmediateResult(Player& player, GameContext& context, const CardResult& result);
 
         CardDeck<ChanceCard>& getChanceDeck();
         const CardDeck<ChanceCard>& getChanceDeck() const;
