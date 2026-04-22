@@ -6,7 +6,9 @@
 #include <vector>
 
 #include "core/Bank.hpp"
+#include "core/config/header/GameConfig.hpp"
 #include "models/Player.hpp"
+#include "models/board/header/Board.hpp"
 #include "models/effects/DiscountEffect.hpp"
 #include "models/effects/ShieldEffect.hpp"
 #include "models/cards/chance/ChanceGoToJailCard.hpp"
@@ -21,6 +23,9 @@
 #include "models/cards/skill/MoveCard.hpp"
 #include "models/cards/skill/ShieldCard.hpp"
 #include "models/cards/skill/TeleportCard.hpp"
+#include "tile/header/PropertyTile.hpp"
+#include "tile/header/StreetTile.hpp"
+#include "tile/header/Tile.hpp"
 #include "utils/Types.hpp"
 
 namespace {
@@ -62,6 +67,177 @@ namespace {
         result.message = std::move(message);
         return result;
     }
+
+    int effectiveBoardSize(const GameContext& context) {
+        const int size = context.board.getSize();
+        return size > 0 ? size : Board::BOARD_SIZE;
+    }
+
+    int normalizePosition(int position, int boardSize) {
+        if (boardSize <= 0) {
+            return 0;
+        }
+        return (position % boardSize + boardSize) % boardSize;
+    }
+
+    int findFirstTileIndex(const Board& board, TileType type) {
+        for (int i = 0; i < board.getSize(); ++i) {
+            const Tile* tile = board.getTile(i);
+            if (tile && tile->getType() == type) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    int findNextRailroadIndex(const Board& board, int currentPosition, int boardSize) {
+        int bestIndex = -1;
+        int bestDistance = boardSize + 1;
+
+        for (int i = 0; i < board.getSize(); ++i) {
+            const Tile* tile = board.getTile(i);
+            if (!tile || tile->getType() != TileType::RAILROAD) {
+                continue;
+            }
+
+            int distance = normalizePosition(i - currentPosition, boardSize);
+            if (distance == 0) {
+                distance = boardSize;
+            }
+
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                bestIndex = i;
+            }
+        }
+
+        return bestIndex;
+    }
+
+    void payGoSalary(Player& player, GameContext& context) {
+        const int salary = context.config.getGoSalary();
+        if (salary > 0) {
+            context.bank.payPlayer(player, Money(salary), "Petak Mulai");
+        }
+    }
+
+    void awardGoSalaryIfNeeded(Player& player, GameContext& context, int startPosition,
+                               int destinationIndex, int movementOffset, bool includePassingGo) {
+        const int boardSize = effectiveBoardSize(context);
+        const int goIndex = findFirstTileIndex(context.board, TileType::GO);
+        const int normalizedGoIndex = goIndex >= 0 ? goIndex : 0;
+
+        if (destinationIndex == normalizedGoIndex && startPosition != destinationIndex) {
+            payGoSalary(player, context);
+            return;
+        }
+
+        if (includePassingGo && movementOffset > 0 && startPosition + movementOffset >= boardSize) {
+            payGoSalary(player, context);
+        }
+    }
+
+    CardResult movePlayerBy(Player& player, GameContext& context, CardResult applied, int movementOffset) {
+        const int boardSize = effectiveBoardSize(context);
+        if (boardSize <= 0) {
+            return CardResult::fail("Ukuran papan tidak valid.");
+        }
+
+        const int startPosition = normalizePosition(player.getPosition(), boardSize);
+        const int destinationIndex = normalizePosition(startPosition + movementOffset, boardSize);
+        player.setPosition(destinationIndex);
+        applied.destinationIndex = destinationIndex;
+        applied.movedPlayer = true;
+        awardGoSalaryIfNeeded(player, context, startPosition, destinationIndex, movementOffset, true);
+        return applied;
+    }
+
+    CardResult movePlayerTo(Player& player, GameContext& context, CardResult applied,
+                            int destinationIndex, bool includePassingGo) {
+        const int boardSize = effectiveBoardSize(context);
+        if (boardSize <= 0) {
+            return CardResult::fail("Ukuran papan tidak valid.");
+        }
+        if (destinationIndex < 0 || destinationIndex >= boardSize) {
+            return CardResult::fail("Petak tujuan kartu tidak valid.");
+        }
+
+        const int startPosition = normalizePosition(player.getPosition(), boardSize);
+        const int movementOffset = includePassingGo ? normalizePosition(destinationIndex - startPosition, boardSize) : 0;
+        player.setPosition(destinationIndex);
+        applied.destinationIndex = destinationIndex;
+        applied.movedPlayer = true;
+        awardGoSalaryIfNeeded(player, context, startPosition, destinationIndex, movementOffset, includePassingGo);
+        return applied;
+    }
+
+    CardResult sendPlayerToJail(Player& player, GameContext& context, CardResult applied) {
+        const int jailIndex = findFirstTileIndex(context.board, TileType::JAIL);
+        if (jailIndex >= 0) {
+            player.setPosition(jailIndex);
+            applied.destinationIndex = jailIndex;
+            applied.movedPlayer = true;
+        }
+        player.setStatus(PlayerStatus::JAILED);
+        player.setConsecutiveDoubles(0);
+        player.resetJailTurns();
+        return applied;
+    }
+
+    bool isAheadOfPlayer(const Player& player, const Player& target, int boardSize) {
+        if (boardSize <= 0) {
+            return false;
+        }
+        const int distance = normalizePosition(target.getPosition() - player.getPosition(), boardSize);
+        return distance > 0;
+    }
+
+    CardResult pullTargetPlayer(Player& player, GameContext& context, CardResult applied, Player* targetPlayer) {
+        if (!targetPlayer) {
+            return CardResult::fail("Target LassoCard belum dipilih.");
+        }
+        if (targetPlayer == &player || targetPlayer->isBankrupt()) {
+            return CardResult::fail("Target LassoCard tidak valid.");
+        }
+
+        const int boardSize = effectiveBoardSize(context);
+        if (!isAheadOfPlayer(player, *targetPlayer, boardSize)) {
+            return CardResult::fail("Target LassoCard harus berada di depan pemain.");
+        }
+
+        targetPlayer->setPosition(player.getPosition());
+        applied.targetPlayer = targetPlayer;
+        applied.movedPlayer = true;
+        applied.resolveLanding = false;
+        return applied;
+    }
+
+    CardResult demolishTargetProperty(Player& player, GameContext& context, CardResult applied,
+                                      PropertyTile* targetProperty) {
+        if (!targetProperty) {
+            return CardResult::fail("Target DemolitionCard belum dipilih.");
+        }
+
+        Player* owner = targetProperty->getOwner();
+        if (!owner || owner == &player || owner->isBankrupt()) {
+            return CardResult::fail("Target DemolitionCard harus berupa properti milik lawan.");
+        }
+
+        if (StreetTile* street = dynamic_cast<StreetTile*>(targetProperty)) {
+            while (street->getBuildingLevel() > 0) {
+                street->demolish();
+            }
+        }
+
+        owner->removeProperty(targetProperty);
+        targetProperty->setOwner(nullptr);
+        targetProperty->setStatus(PropertyStatus::BANK);
+        context.board.updateMonopolies();
+
+        applied.targetPlayer = owner;
+        applied.targetProperty = targetProperty;
+        return applied;
+    }
 }
 
 CardSystem::CardSystem() {
@@ -81,11 +257,11 @@ std::unique_ptr<SkillCard> CardSystem::drawSkill() {
 }
 
 void CardSystem::discardChance(std::unique_ptr<ChanceCard> card) {
-    chanceDeck.discard(std::move(card));
+    chanceDeck.returnToDrawAndShuffle(std::move(card));
 }
 
 void CardSystem::discardCommunityChest(std::unique_ptr<CommunityChestCard> card) {
-    communityChestDeck.discard(std::move(card));
+    communityChestDeck.returnToDrawAndShuffle(std::move(card));
 }
 
 void CardSystem::discardSkill(std::unique_ptr<SkillCard> card) {
@@ -173,17 +349,45 @@ CardResult CardSystem::applyImmediateResult(Player& player, GameContext& context
             break;
 
         case CardResultAction::SEND_TO_JAIL:
-            player.setStatus(PlayerStatus::JAILED);
-            player.setConsecutiveDoubles(0);
-            player.resetJailTurns();
+            applied = sendPlayerToJail(player, context, applied);
+            break;
+
+        case CardResultAction::MOVE_RELATIVE:
+            applied = movePlayerBy(
+                player,
+                context,
+                applied,
+                result.movementOffset != 0 ? result.movementOffset : result.value
+            );
+            break;
+
+        case CardResultAction::MOVE_TO_NEAREST_STATION: {
+            const int boardSize = effectiveBoardSize(context);
+            const int stationIndex = findNextRailroadIndex(
+                context.board,
+                normalizePosition(player.getPosition(), boardSize),
+                boardSize
+            );
+            if (stationIndex < 0) {
+                return CardResult::fail("Tidak ada stasiun pada papan.");
+            }
+            applied = movePlayerTo(player, context, applied, stationIndex, true);
+            break;
+        }
+
+        case CardResultAction::TELEPORT:
+            applied = movePlayerTo(player, context, applied, result.destinationIndex, false);
+            break;
+
+        case CardResultAction::LASSO:
+            applied = pullTargetPlayer(player, context, applied, result.targetPlayer);
+            break;
+
+        case CardResultAction::DEMOLISH_PROPERTY:
+            applied = demolishTargetProperty(player, context, applied, result.targetProperty);
             break;
 
         case CardResultAction::NONE:
-        case CardResultAction::MOVE_RELATIVE:
-        case CardResultAction::MOVE_TO_NEAREST_STATION:
-        case CardResultAction::TELEPORT:
-        case CardResultAction::LASSO:
-        case CardResultAction::DEMOLISH_PROPERTY:
             break;
     }
 
