@@ -2,19 +2,38 @@
 #include "models/Player.hpp"
 #include "utils/Exceptions.hpp"
 
+namespace {
+    Money getPayableAmount(const Player& player, const Money& amount) {
+        if (player.isPaymentBlocked()) {
+            return Money::zero();
+        }
+        return player.applyOutgoingModifiers(amount);
+    }
+}
+
 void Bank::payPlayer(Player& player, const Money& amount, const std::string& /*reason*/) {
     player.addMoney(amount);
 }
 
 void Bank::collectFromPlayer(Player& player, const Money& amount, const std::string& /*reason*/) {
-    if (!player.canAfford(amount))
-        throw InsufficientFundsException(amount, player.getMoney());
-    player.deductMoney(amount);
+    Money payableAmount = getPayableAmount(player, amount);
+    if (payableAmount.isZero()) {
+        return;
+    }
+
+    if (!player.canAfford(payableAmount))
+        throw InsufficientFundsException(payableAmount, player.getMoney());
+    player.deductMoney(payableAmount);
 }
 
 void Bank::transferBetweenPlayers(Player& from, Player& to, const Money& amount, const std::string& /*reason*/) {
-    if (!from.canAfford(amount))
-        throw InsufficientFundsException(amount, from.getMoney());
-    from.deductMoney(amount);
-    to.addMoney(amount);
+    Money payableAmount = getPayableAmount(from, amount);
+    if (payableAmount.isZero()) {
+        return;
+    }
+
+    if (!from.canAfford(payableAmount))
+        throw InsufficientFundsException(payableAmount, from.getMoney());
+    from.deductMoney(payableAmount);
+    to.addMoney(payableAmount);
 }
