@@ -75,6 +75,14 @@ class CardDeck {
             usedCards.push_back(std::move(card));
         }
 
+        void returnToDrawAndShuffle(CardPtr card) {
+            if (!card) {
+                return;
+            }
+            drawCards.push_back(std::move(card));
+            shuffle();
+        }
+
         void clear() {
             drawCards.clear();
             usedCards.clear();
