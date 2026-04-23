@@ -7,6 +7,7 @@
 #include "core/command/header/CommandRegistry.hpp"
 #include "core/Bank.hpp"
 #include "core/FestivalManager.hpp"
+#include "core/IGameRepository.hpp"
 #include "core/config/header/GameConfig.hpp"
 #include "core/log/header/TransactionLogger.hpp"
 #include "core/state/header/GameState.hpp"
@@ -17,6 +18,7 @@
 #include "models/board/header/Board.hpp"
 #include "models/board/header/Dice.hpp"
 #include "models/cards/CardSystem.hpp"
+#include "models/Money.hpp"
 
 class Player;
 class PropertyTile;
@@ -54,6 +56,11 @@ public:
 	CardSystem& getCardSystem();
 	bool processCommand(const std::string& input, Player& player);
 
+	void setRepository(IGameRepository* r);
+	bool saveGame(const std::string& id);
+	bool loadGame(const std::string& id);
+	void printWinners() const;
+
 private:
 	void buildDefaultBoard(const std::string& configDirectory);
 	void executeTurn(Player& player);
@@ -80,6 +87,10 @@ private:
 	bool handleAuctionCommand(const std::string& input, Player& player);
 	void checkBankruptcy(Player& player);
 	std::string normalizeCommandToken(const std::string& input) const;
+	void handleJailTurn(Player& player);
+	void payJailFine(Player& player);
+	void executeBankruptcy(Player& debtor, Player* creditor, Money obligation);
+	void syncTurnManagerAfterLoad();
 
 	GameState gameState;
 	bool running;
@@ -98,6 +109,7 @@ private:
 	Board board;
 	CardSystem cardSystem;
 	std::string configDirectory;
+	IGameRepository* repository;
 
 protected:
 };

@@ -125,3 +125,37 @@ int FestivalManager::getDuration(PropertyTile* property) const {
 bool FestivalManager::hasActiveEffect(PropertyTile* property) const {
     return activeEffects.count(property) > 0;
 }
+
+std::vector<FestivalEffectSnapshot> FestivalManager::getActiveEffectsSnapshot() const {
+    std::vector<FestivalEffectSnapshot> out;
+    out.reserve(activeEffects.size());
+    for (const auto& entry : activeEffects) {
+        const FestivalPropertyEffect& fe = entry.second;
+        out.emplace_back(entry.first, fe.getOwner(), fe.getMultiplier(), fe.getTurnsRemaining(), fe.getTimesApplied());
+    }
+    return out;
+}
+
+void FestivalManager::restoreEffect(PropertyTile* prop, Player* owner, int mult, int turnsRemaining, int timesApplied) {
+    if (!prop || !owner || mult <= 0 || turnsRemaining <= 0) {
+        return;
+    }
+    FestivalPropertyEffect fe;
+    fe.setOwner(owner);
+    fe.setMultiplier(mult);
+    fe.setTurnsRemaining(turnsRemaining);
+    fe.setTimesApplied(timesApplied);
+    activeEffects[prop] = fe;
+    owner->addEffect(new FestivalRentEffect(mult, turnsRemaining));
+}
+
+void FestivalManager::clearAllEffects() {
+    activeEffects.clear();
+}
+
+void FestivalManager::removeEffectsForProperty(PropertyTile* prop) {
+    if (!prop) {
+        return;
+    }
+    activeEffects.erase(prop);
+}

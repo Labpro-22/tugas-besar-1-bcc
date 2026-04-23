@@ -1,6 +1,9 @@
 #ifndef FESTIVALMANAGER_HPP
 #define FESTIVALMANAGER_HPP
 #include <map>
+#include <vector>
+
+#include "core/FestivalEffectSnapshot.hpp"
 
 class Player;
 class PropertyTile;
@@ -29,6 +32,11 @@ public:
     int  getMultiplier(PropertyTile* property) const;
     int  getDuration(PropertyTile* property) const;
     bool hasActiveEffect(PropertyTile* property) const;
+
+    std::vector<FestivalEffectSnapshot> getActiveEffectsSnapshot() const;
+    void restoreEffect(PropertyTile* prop, Player* owner, int mult, int turnsRemaining, int timesApplied);
+    void clearAllEffects();
+    void removeEffectsForProperty(PropertyTile* prop);
 
 private:
     class FestivalPropertyEffect {

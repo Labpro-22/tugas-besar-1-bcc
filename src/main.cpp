@@ -1,7 +1,10 @@
 #include <cstdlib>
 #include <iostream>
 #include <memory>
+#include <random>
+#include <string>
 #include <vector>
+#include <algorithm>
 
 #if NIMONSPOLY_ENABLE_SFML
 #include "core/state/header/GameStateView.hpp"
@@ -15,7 +18,9 @@
 #include <optional>
 #else
 #include "controllers/HumanController.hpp"
+#include "core/TextFileRepository.hpp"
 #include "core/engine/header/GameEngine.hpp"
+#include "models/Money.hpp"
 #include "models/Player.hpp"
 #include "ui/ConsoleInput.hpp"
 #endif
@@ -65,24 +70,65 @@ int main() {
     ConsoleInput input;
     HumanController controller(&input);
     GameEngine engine;
+    TextFileRepository repo;
+    engine.setRepository(&repo);
     engine.loadConfiguration("config");
 
-    const int playerCount = input.getNumberInRange("Jumlah pemain", 2, 4);
+    std::cout << "1. Permainan baru\n2. Muat simpanan\n";
+    const int menu = input.getNumberInRange("Pilihan", 1, 2);
+
     std::vector<std::unique_ptr<Player>> ownedPlayers;
     std::vector<Player*> players;
-    ownedPlayers.reserve(playerCount);
-    players.reserve(playerCount);
+    std::string loadPath;
 
-    for (int i = 0; i < playerCount; ++i) {
-        const std::string name = input.getString("Nama pemain " + std::to_string(i + 1));
-        ownedPlayers.push_back(std::make_unique<Player>(name.empty() ? "P" + std::to_string(i + 1) : name,
-                                                        Money(engine.getConfig().getStartingMoney()),
-                                                        &controller));
-        players.push_back(ownedPlayers.back().get());
+    if (menu == 2) {
+        loadPath = input.getString("Nama berkas simpanan");
+        if (loadPath.empty()) {
+            loadPath = "nimonspoli_save.txt";
+        }
+        if (!repo.exists(loadPath)) {
+            std::cout << "Berkas tidak ditemukan.\n";
+            return EXIT_FAILURE;
+        }
+        const std::vector<std::string> names = repo.getPlayerNames(loadPath);
+        if (names.empty()) {
+            std::cout << "Simpanan tidak valid.\n";
+            return EXIT_FAILURE;
+        }
+        ownedPlayers.reserve(names.size());
+        players.reserve(names.size());
+        for (const std::string& name : names) {
+            const std::string useName = name.empty() ? "P" + std::to_string(players.size() + 1) : name;
+            ownedPlayers.push_back(std::make_unique<Player>(useName, Money(engine.getConfig().getStartingMoney()),
+                &controller));
+            players.push_back(ownedPlayers.back().get());
+        }
+        engine.initialize(players, engine.getConfig().getMaxTurns());
+        engine.start();
+        if (!engine.loadGame(loadPath)) {
+            std::cout << "Gagal memuat simpanan.\n";
+            return EXIT_FAILURE;
+        }
+    } else {
+        const int playerCount = input.getNumberInRange("Jumlah pemain", 2, 4);
+        ownedPlayers.reserve(playerCount);
+        players.reserve(playerCount);
+
+        for (int i = 0; i < playerCount; ++i) {
+            const std::string name = input.getString("Nama pemain " + std::to_string(i + 1));
+            ownedPlayers.push_back(std::make_unique<Player>(name.empty() ? "P" + std::to_string(i + 1) : name,
+                                                            Money(engine.getConfig().getStartingMoney()),
+                                                            &controller));
+            players.push_back(ownedPlayers.back().get());
+        }
+
+        std::random_device rd;
+        std::mt19937 g(rd());
+        std::shuffle(players.begin(), players.end(), g);
+
+        engine.initialize(players, engine.getConfig().getMaxTurns());
+        engine.start();
     }
-
-    engine.initialize(players, engine.getConfig().getMaxTurns());
-    engine.start();
 
     while (engine.isRunning()) {
         if (engine.getState().getCurrentTurn() > engine.getState().getMaxTurn()) {
@@ -91,17 +137,12 @@ int main() {
         }
 
         int activeCount = 0;
-        Player* winner = nullptr;
         for (Player* player : players) {
             if (player && !player->isBankrupt()) {
                 ++activeCount;
-                winner = player;
             }
         }
         if (activeCount <= 1) {
-            if (winner) {
-                std::cout << "Pemenang: " << winner->getUsername() << "\n";
-            }
             engine.stop();
             break;
         }
@@ -125,6 +166,35 @@ int main() {
             break;
         }
         engine.processCommand(command, *active);
+    }
+
+    std::vector<Player*> survivors;
+    for (Player* p : players) {
+        if (p && !p->isBankrupt()) {
+            survivors.push_back(p);
+        }
+    }
+    std::sort(survivors.begin(), survivors.end(), [](Player* a, Player* b) {
+        if (!a || !b) {
+            return a != nullptr;
+        }
+        const Money wa = a->getTotalWealth();
+        const Money wb = b->getTotalWealth();
+        if (wa.getAmount() != wb.getAmount()) {
+            return wa.getAmount() > wb.getAmount();
+        }
+        return a->getUsername() < b->getUsername();
+    });
+
+    if (survivors.size() == 1) {
+        std::cout << "Pemenang: " << survivors.front()->getUsername() << "\n";
+    } else if (!survivors.empty()) {
+        std::cout << "Permainan berakhir. Peringkat:\n";
+        int r = 1;
+        for (Player* p : survivors) {
+            if (!p) continue;
+            std::cout << r++ << ". " << p->getUsername() << " — " << p->getTotalWealth().toString() << "\n";
+        }
     }
 
     return EXIT_SUCCESS;

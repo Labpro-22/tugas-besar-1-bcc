@@ -252,6 +252,17 @@ void Player::resetTurnFlags() {
     hasRolledDiceThisTurn = false;
 }
 
+void Player::clearSkillCardsAndEffects() {
+    skillCards.clear();
+    for (auto& effect : activeEffects) {
+        if (effect) {
+            effect->onEnd(*this);
+        }
+    }
+    activeEffects.clear();
+    properties.clear();
+}
+
 int Player::getJailTurnsRemaining() const {
     return jailTurnsRemaining;
 }

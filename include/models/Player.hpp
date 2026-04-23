@@ -7,7 +7,7 @@
 #include "models/Money.hpp"
 #include "utils/Enums.hpp"
 
-class PropertyTile; // Forward declarations
+class PropertyTile;
 class StreetTile;
 class SkillCard;
 class PlayerController;
@@ -70,6 +70,7 @@ public:
     void setHasUsedSkillCardThisTurn(bool v);
     void setHasRolledDiceThisTurn(bool v);
     void resetTurnFlags();
+    void clearSkillCardsAndEffects();
 
     int getJailTurnsRemaining() const;
     void incrementJailTurn();
