@@ -229,7 +229,7 @@ void GUIView::renderPromptOverlay(const GUIPromptState& prompt) {
 #endif
 }
 
-void GUIView::handleInGameClick(float mx, float my, std::string& outCommand) {
+void GUIView::handleInGameClick(float mx, float my, std::string& outCommand, const GameStateView& state) {
 #if NIMONSPOLY_ENABLE_SFML
     if (!window) return;
     const float W = static_cast<float>(window->getSize().x);
@@ -269,7 +269,9 @@ void GUIView::handleInGameClick(float mx, float my, std::string& outCommand) {
     float by = H - SECTION_PAD - btnH * 0.5f;
     if (mx >= bx - btnW * 0.5f && mx <= bx + btnW * 0.5f &&
         my >= by - btnH * 0.5f && my <= by + btnH * 0.5f) {
-        outCommand = "DADU";
+        if (!state.hasRolledDice) {
+            outCommand = "DADU";
+        }
     }
 #endif
 }
@@ -528,7 +530,7 @@ void GUIView::drawRightPanel(sf::RenderWindow& rw, const GameStateView& state) {
         float btnH = std::min(H * 0.14f, 100.f);
         float bx   = rpX + colW * 0.5f;
         float by   = H - LAYOUT_PAD - btnH * 0.5f;
-        bool disabled = diceRolled_;
+        bool disabled = state.hasRolledDice;
 
         const sf::Texture* rectBtnTex = am.texture("assets/components/btn/EmptyRectBtn.png");
         if (rectBtnTex && !disabled) {

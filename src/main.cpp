@@ -157,7 +157,7 @@ int main() {
                         if (mb->button == sf::Mouse::Button::Left) {
                             float mx = static_cast<float>(mb->position.x);
                             float my = static_cast<float>(mb->position.y);
-                            view.handleInGameClick(mx, my, pendingCommand);
+                            view.handleInGameClick(mx, my, pendingCommand, state);
                         }
                     }
                 }

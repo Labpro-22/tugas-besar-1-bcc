@@ -44,8 +44,8 @@ void GUIView::renderCurrentScreen() {
         case AppScreen::NEW_GAME_CUST_PLAYER: drawCustPlayer();  break;
         case AppScreen::NEW_GAME_CUST_MAP:    drawCustMap();     break;
         case AppScreen::LOAD_GAME:            drawLoadGame();    break;
-        case AppScreen::IN_GAME:
-        case AppScreen::GAME_OVER:            break;
+        case AppScreen::IN_GAME:              break;
+        case AppScreen::GAME_OVER:            drawGameOver();    break;
     }
 }
 
@@ -287,6 +287,73 @@ void GUIView::drawLoadGame() {
 #endif
 }
 
+void GUIView::drawGameOver() {
+#if NIMONSPOLY_ENABLE_SFML
+    if (!window) return;
+    sf::RenderWindow& rw = *window;
+    AssetManager& am = AssetManager::get();
+
+    rw.clear(sf::Color(0x1a, 0x27, 0x44));
+    const sf::Texture* globeTex = am.texture("assets/bg/Globe.png");
+    if (globeTex) {
+        gui::draw::drawSpriteCover(rw, globeTex);
+    } else {
+        gui::draw::drawGlobeBackground(rw);
+    }
+
+    const float W = static_cast<float>(rw.getSize().x);
+    const float H = static_cast<float>(rw.getSize().y);
+    const float cx = W * 0.5f, cy = H * 0.5f;
+
+    unsigned titleSz = static_cast<unsigned>(H * 0.08f);
+    sf::Text title(am.font("title"), "GAME OVER", titleSz);
+    title.setFillColor(sf::Color(235, 240, 248));
+    auto tb = title.getLocalBounds();
+    title.setOrigin({tb.position.x + tb.size.x * 0.5f, tb.position.y + tb.size.y * 0.5f});
+    title.setPosition({cx, cy - H * 0.22f});
+    rw.draw(title);
+
+    // Winners
+    float y = cy - H * 0.08f;
+    if (!winnerInfo_.winners.empty()) {
+        std::string winText = "Winner: " + winnerInfo_.winners.front();
+        unsigned winSz = static_cast<unsigned>(H * 0.045f);
+        sf::Text wt(am.font("bold"), winText, winSz);
+        wt.setFillColor(sf::Color(0xff, 0xf2, 0x00));
+        auto wb = wt.getLocalBounds();
+        wt.setOrigin({wb.position.x + wb.size.x * 0.5f, wb.position.y + wb.size.y * 0.5f});
+        wt.setPosition({cx, y});
+        rw.draw(wt);
+        y += H * 0.07f;
+    }
+
+    // Ranking
+    unsigned rankSz = static_cast<unsigned>(H * 0.028f);
+    for (size_t i = 0; i < winnerInfo_.players.size(); ++i) {
+        const auto& ps = winnerInfo_.players[i];
+        std::string line = std::to_string(i + 1) + ". " + ps.username +
+                           "  —  " + ps.money.toString();
+        sf::Text rt(am.font("regular"), line, rankSz);
+        rt.setFillColor(i == 0 ? sf::Color(0xff, 0xf2, 0x00) : sf::Color(210, 220, 235));
+        auto rb = rt.getLocalBounds();
+        rt.setOrigin({rb.position.x + rb.size.x * 0.5f, rb.position.y + rb.size.y * 0.5f});
+        rt.setPosition({cx, y + static_cast<float>(i) * rankSz * 1.5f});
+        rw.draw(rt);
+    }
+
+    // Back to menu hint
+    unsigned hintSz = static_cast<unsigned>(H * 0.022f);
+    sf::Text hint(am.font("regular"), "Press ESC or click to return to menu", hintSz);
+    hint.setFillColor(sf::Color(150, 160, 180));
+    auto hb = hint.getLocalBounds();
+    hint.setOrigin({hb.position.x + hb.size.x * 0.5f, hb.position.y + hb.size.y * 0.5f});
+    hint.setPosition({cx, H * 0.92f});
+    rw.draw(hint);
+
+    rw.display();
+#endif
+}
+
 bool GUIView::handleMenuEvent(const sf::Event& event) {
 #if NIMONSPOLY_ENABLE_SFML
     if (!window) return false;
@@ -508,13 +575,19 @@ bool GUIView::handleMenuEvent(const sf::Event& event) {
                 screen_ = AppScreen::IN_GAME;
                 return true;   // signal: load game
             }
+        } else if (screen_ == AppScreen::GAME_OVER) {
+            screen_ = AppScreen::LANDING;
+            hoveredItem_ = -1;
+            return false;
         }
         return false;
     }
 
     if (const auto* kp = event.getIf<sf::Event::KeyPressed>()) {
         if (kp->code == sf::Keyboard::Key::Escape) {
-            if (screen_ == AppScreen::NEW_GAME_NUM_PLAYERS ||
+            if (screen_ == AppScreen::GAME_OVER) {
+                screen_ = AppScreen::LANDING;
+            } else if (screen_ == AppScreen::NEW_GAME_NUM_PLAYERS ||
                 screen_ == AppScreen::LOAD_GAME)
                 screen_ = AppScreen::LANDING;
             else if (screen_ == AppScreen::NEW_GAME_CUST_PLAYER)

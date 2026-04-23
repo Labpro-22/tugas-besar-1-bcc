@@ -3,7 +3,6 @@
 void GUIView::showDiceResult(int d1, int d2, const string& playerName) {
     lastD1_ = d1;
     lastD2_ = d2;
-    diceRolled_ = true;
     (void)playerName;
 }
 
@@ -62,7 +61,7 @@ void GUIView::showTransactionLog(const vector<LogEntry>& entries) {
 }
 
 void GUIView::showWinner(const WinnerInfo& winInfo) {
-    (void)winInfo;
+    winnerInfo_ = winInfo;
 }
 
 void GUIView::showJailStatus(const JailInfo& jailInfo) {
@@ -94,7 +93,6 @@ void GUIView::showSaveLoadStatus(const string& message) {
 }
 
 void GUIView::showTurnInfo(const string& playerName, int turnNum, int maxTurn) {
-    diceRolled_ = false;
     (void)playerName; (void)turnNum; (void)maxTurn;
 }
 
