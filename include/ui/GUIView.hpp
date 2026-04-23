@@ -74,13 +74,13 @@ private:
     [[maybe_unused]] sf::RenderWindow* window;
     AppScreen  screen_{AppScreen::LANDING};
     SetupState setup_;
-    int        custPlayerTab_{0};
-    int        hoveredItem_{-1};
+    [[maybe_unused]] int custPlayerTab_{0};
+    [[maybe_unused]] int hoveredItem_{-1};
 
     vector<LogEntry> log_;
     int  lastD1_{0}, lastD2_{0};
     bool diceRolled_{false};
-    int  logScrollOffset_{0};
+    [[maybe_unused]] int logScrollOffset_{0};
 
     void drawLeftPanel (sf::RenderWindow& rw, const GameStateView& state);
     void drawRightPanel(sf::RenderWindow& rw, const GameStateView& state);

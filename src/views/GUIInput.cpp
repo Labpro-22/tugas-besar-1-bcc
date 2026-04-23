@@ -10,11 +10,8 @@
 #include <SFML/Window/Event.hpp>
 #endif
 
-// ── Constructor ───────────────────────────────────────────────────────────────
-
 GUIInput::GUIInput(sf::RenderWindow& window) : window_(&window) {}
 
-// ── Prompt state access ───────────────────────────────────────────────────────
 
 const GUIPromptState& GUIInput::currentPrompt() const { return prompt_; }
 
@@ -22,7 +19,6 @@ void GUIInput::setRenderCallback(GUIRenderCallback cb) {
     renderCallback_ = std::move(cb);
 }
 
-// ── Internal helpers ──────────────────────────────────────────────────────────
 
 void GUIInput::activatePrompt(GUIPromptType type, const string& label,
                                int minVal, int maxVal,
@@ -155,7 +151,6 @@ bool GUIInput::handleEvent(const sf::Event& event) {
     return prompt_.resolved;
 }
 
-// ── Blocking wait: pump SFML events until prompt resolved ─────────────────────
 
 void GUIInput::waitForResolution() {
 #if NIMONSPOLY_ENABLE_SFML
@@ -177,7 +172,6 @@ void GUIInput::waitForResolution() {
 #endif
 }
 
-// ── IGameInput implementation ─────────────────────────────────────────────────
 
 int GUIInput::getPlayerCount() {
     activatePrompt(GUIPromptType::PLAYER_COUNT, "Jumlah pemain (2-4)", 2, 4);

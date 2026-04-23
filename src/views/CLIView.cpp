@@ -11,7 +11,6 @@
 #include "core/state/header/GameStateView.hpp"
 #include "utils/Enums.hpp"
 
-// ── ANSI helpers ──────────────────────────────────────────────────────────────
 
 static const string ANSI_RESET = "\033[0m";
 static const string ANSI_BOLD  = "\033[1m";
@@ -87,8 +86,6 @@ static string moneyFmt(int amount) {
 static string moneyFmt(const Money& m) {
     return moneyFmt(m.getAmount());
 }
-
-// ── Board rendering ───────────────────────────────────────────────────────────
 
 // Returns the 10-char visible content of line 1 (color tag + code)
 static string tileL1(const TileView& t) {
@@ -196,7 +193,6 @@ void CLIView::showBoard(const GameStateView& state) {
         return tileL2(t, getProp(t.code), playerNum, getHere(idx));
     };
 
-    // ── Border helpers ───────────────────────────────────────────────────────
     // Full 11-tile border
     auto borderFull = [&]() -> string {
         string s;
@@ -209,7 +205,6 @@ void CLIView::showBoard(const GameStateView& state) {
         return "+----------+" + string(98, ' ') + "+----------+";
     };
 
-    // ── Center content (18 lines × 98 chars) ─────────────────────────────────
     string turnStr = "TURN " + to_string(state.currentTurn) + " / " + to_string(state.maxTurn);
     string cl[18];
     cl[0]  = string(98, ' ');
@@ -230,13 +225,6 @@ void CLIView::showBoard(const GameStateView& state) {
     cl[15] = center("(1)-(4): Bidak (IN=Tahanan, V=Mampir)", 98);
     cl[16] = center("----------------------------------", 98);
     cl[17] = string(98, ' ');
-
-    // ── Print board ──────────────────────────────────────────────────────────
-    // Layout (0-based tile indices):
-    //   Top row    : 20..30 (left→right)
-    //   Left col   : 19..11 (top→bottom)
-    //   Right col  : 31..39 (top→bottom)
-    //   Bottom row : 10..0  (left→right)
 
     // Top border
     out_ << borderFull() << "\n";
@@ -281,11 +269,9 @@ void CLIView::showBoard(const GameStateView& state) {
     out_ << borderFull() << "\n\n";
 }
 
-// ── CLIView constructor ───────────────────────────────────────────────────────
 
 CLIView::CLIView(std::ostream& out) : out_(out) {}
 
-// ── Setup ─────────────────────────────────────────────────────────────────────
 
 void CLIView::showMainMenu() {
     out_ << "\n";
@@ -306,14 +292,12 @@ void CLIView::showPlayerOrder(const vector<string>& orderedNames) {
     out_ << "\n";
 }
 
-// ── Turn ──────────────────────────────────────────────────────────────────────
 
 void CLIView::showTurnInfo(const string& playerName, int turnNum, int maxTurn) {
     out_ << "\n=== Giliran: " << playerName
          << " | Turn " << turnNum << "/" << maxTurn << " ===\n";
 }
 
-// ── Dice ──────────────────────────────────────────────────────────────────────
 
 void CLIView::showDiceResult(int d1, int d2, const string& playerName) {
     out_ << "\nMengocok dadu...\n";
@@ -333,7 +317,6 @@ void CLIView::showDoubleBonusTurn(const string& playerName, int doubleCount) {
     }
 }
 
-// ── Properties ───────────────────────────────────────────────────────────────
 
 void CLIView::showPropertyCard(const PropertyInfo& info) {
     string typeName;
@@ -426,15 +409,12 @@ void CLIView::showPlayerProperties(const vector<PropertyInfo>& list) {
     out_ << "\nTotal kekayaan properti: " << moneyFmt(total) << "\n\n";
 }
 
-// ── Buy ───────────────────────────────────────────────────────────────────────
 
 void CLIView::showBuyPrompt(const PropertyInfo& info, Money playerMoney) {
     showPropertyCard(info);
     out_ << "Uang kamu saat ini: " << moneyFmt(playerMoney) << "\n";
     out_ << "Apakah kamu ingin membeli properti ini seharga " << moneyFmt(info.purchasePrice) << "? (y/n): ";
 }
-
-// ── Rent ──────────────────────────────────────────────────────────────────────
 
 void CLIView::showRentPayment(const RentInfo& rentInfo) {
     if (rentInfo.property.status == PropertyStatus::MORTGAGED) {
@@ -458,8 +438,6 @@ void CLIView::showRentPayment(const RentInfo& rentInfo) {
          << " -> " << moneyFmt(rentInfo.ownerAfter) << "\n\n";
 }
 
-// ── Tax ───────────────────────────────────────────────────────────────────────
-
 void CLIView::showTaxPrompt(const TaxInfo& taxInfo) {
     if (taxInfo.taxType == TileType::TAX_PBM) {
         out_ << "\nKamu mendarat di Pajak Barang Mewah (PBM)!\n";
@@ -474,8 +452,6 @@ void CLIView::showTaxPrompt(const TaxInfo& taxInfo) {
     out_ << "(Pilih sebelum menghitung kekayaan!)\n";
     out_ << "Pilihan (1/2): ";
 }
-
-// ── Auction ───────────────────────────────────────────────────────────────────
 
 void CLIView::showAuctionState(const AuctionState& state) {
     out_ << "\nProperti " << state.property.name << " (" << state.property.code << ") sedang dilelang!\n";
@@ -501,8 +477,6 @@ void CLIView::showAuctionWinner(const AuctionSummary& summary) {
     }
     out_ << "\n";
 }
-
-// ── Festival ──────────────────────────────────────────────────────────────────
 
 void CLIView::showFestivalPrompt(const vector<PropertyInfo>& ownedProperties) {
     out_ << "\nKamu mendarat di petak Festival!\n";
@@ -534,8 +508,6 @@ void CLIView::showFestivalAtMax(const FestivalEffectInfo& info) {
     out_ << "Durasi di-reset menjadi: " << info.durationTurns << " giliran\n\n";
 }
 
-// ── Jail ──────────────────────────────────────────────────────────────────────
-
 void CLIView::showJailEntry(const JailEntryInfo& info) {
     out_ << "\n";
     switch (info.reason) {
@@ -564,8 +536,6 @@ void CLIView::showJailStatus(const JailInfo& info) {
         out_ << "[!] Ini giliran terakhir — wajib bayar denda jika tidak double.\n";
     }
 }
-
-// ── Bankruptcy / Liquidation ──────────────────────────────────────────────────
 
 void CLIView::showBankruptcy(const BankruptcyInfo& info) {
     out_ << "\n" << info.playerName << " dinyatakan BANGKRUT!\n";
@@ -616,8 +586,6 @@ void CLIView::showLiquidationResult(bool canCover, Money finalBalance) {
         out_ << "Likuidasi tidak cukup untuk menutup kewajiban.\n\n";
     }
 }
-
-// ── Build / Mortgage / Redeem ─────────────────────────────────────────────────
 
 void CLIView::showBuildMenu(const BuildMenuState& state) {
     if (state.groups.empty()) {
@@ -680,8 +648,6 @@ void CLIView::showRedeemMenu(const RedeemMenuState& state) {
     out_ << "\nPilih nomor properti (0 untuk batal): ";
 }
 
-// ── Cards ─────────────────────────────────────────────────────────────────────
-
 void CLIView::showCardDrawn(const CardInfo& cardInfo) {
     out_ << "\nMengambil kartu...\n";
     out_ << "Kartu: \"" << cardInfo.description << "\"\n\n";
@@ -720,8 +686,6 @@ void CLIView::showDropCardPrompt(const vector<CardInfo>& cards) {
     out_ << "Pilih nomor kartu yang ingin dibuang (1-" << cards.size() << "): ";
 }
 
-// ── Log ───────────────────────────────────────────────────────────────────────
-
 void CLIView::showTransactionLog(const vector<LogEntry>& entries) {
     if (entries.empty()) {
         out_ << "=== Log kosong ===\n";
@@ -736,8 +700,6 @@ void CLIView::showTransactionLog(const vector<LogEntry>& entries) {
     }
     out_ << "\n";
 }
-
-// ── Winner ────────────────────────────────────────────────────────────────────
 
 void CLIView::showWinner(const WinnerInfo& winInfo) {
     out_ << "\n====================================\n";
@@ -771,8 +733,6 @@ void CLIView::showWinner(const WinnerInfo& winInfo) {
     }
     out_ << "====================================\n\n";
 }
-
-// ── Misc ──────────────────────────────────────────────────────────────────────
 
 void CLIView::showSaveLoadStatus(const string& message) {
     out_ << message << "\n";
