@@ -51,7 +51,6 @@ int main() {
     std::vector<std::unique_ptr<HumanController>> ownedControllers;
     std::vector<Player*> players;
     std::string pendingCommand;
-    bool cmdProcessed = true;
 
     input.setRenderCallback([&]() {
         if (view.screen() == AppScreen::IN_GAME && gameInitialized) {
@@ -90,7 +89,6 @@ int main() {
         engine.initialize(players, engine.getConfig().getMaxTurns());
         engine.start();
         gameInitialized = true;
-        cmdProcessed = true;
     };
 
     auto loadGameFromFile = [&](const std::string& path) {
@@ -119,7 +117,6 @@ int main() {
         if (!engine.loadGame(path)) return false;
 
         gameInitialized = true;
-        cmdProcessed = true;
         return true;
     };
 
@@ -148,7 +145,7 @@ int main() {
             } else {
                 if (!gameInitialized) continue;
 
-                // Handle prompt overlay first
+                // When a prompt is active, route events to it
                 if (input.currentPrompt().type != GUIPromptType::NONE && !input.currentPrompt().resolved) {
                     input.handleEvent(*event);
                 } else {
@@ -169,12 +166,6 @@ int main() {
         // Game loop logic
         if (view.screen() == AppScreen::IN_GAME && gameInitialized && engine.isRunning()) {
             Player* active = engine.getState().getActivePlayer();
-            if (!active || active->isBankrupt()) {
-                engine.processCommand("SELESAI", *active);
-                state.refresh(engine.getState());
-                view.showBoard(state);
-                continue;
-            }
 
             int activeCount = 0;
             for (Player* p : players) {
@@ -183,24 +174,24 @@ int main() {
             if (activeCount <= 1) {
                 engine.stop();
                 view.setScreen(AppScreen::GAME_OVER);
+                state.refresh(engine.getState());
+                view.showBoard(state);
                 continue;
             }
 
             if (engine.getState().getCurrentTurn() > engine.getState().getMaxTurn()) {
                 engine.stop();
                 view.setScreen(AppScreen::GAME_OVER);
+                state.refresh(engine.getState());
+                view.showBoard(state);
                 continue;
             }
 
-            if (!pendingCommand.empty() && cmdProcessed) {
-                cmdProcessed = false;
-            }
-
-            if (!pendingCommand.empty() && !cmdProcessed) {
+            if (!active || active->isBankrupt()) {
+                engine.processCommand("SELESAI", *active);
+            } else if (!pendingCommand.empty()) {
                 engine.processCommand(pendingCommand, *active);
                 pendingCommand.clear();
-                cmdProcessed = true;
-                state.refresh(engine.getState());
             }
 
             state.refresh(engine.getState());
