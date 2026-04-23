@@ -1121,23 +1121,10 @@ bool GameEngine::auctionProperty(PropertyTile& property, Player& trigger) {
 		if (PlayerController* controller = bidder->getController()) {
 			decision = controller->decideAuction(highestBid, bidder->getMoney());
 		}
-		if (action == AuctionAction::BID) {
-			int bid = highestBid + 1;
-			std::cout << "Bid untuk " << bidder->getUsername() << " (mis. lelang 500): ";
-			std::string cmd;
-			if (PlayerController* c = bidder->getController()) {
-				cmd = c->chooseCommand(gameState.toView());
-			}
-			std::istringstream bs(cmd);
-			std::string tok;
-			if (bs >> tok) {
-				const std::string lt = lower(tok);
-				if (lt == "lelang" || lt == "bid") {
-					bs >> bid;
-				} else {
-					std::istringstream bs2(cmd);
-					bs2 >> bid;
-				}
+		if (decision.action == AuctionAction::BID) {
+			int bid = decision.bidAmount;
+			if (bid <= highestBid) {
+				bid = highestBid + 1;
 			}
 			if (bid > highestBid && bidder->canAfford(Money(bid))) {
 				highestBid = bid;

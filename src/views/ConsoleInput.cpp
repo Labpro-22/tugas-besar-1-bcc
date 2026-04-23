@@ -9,6 +9,14 @@ namespace {
     }
 }
 
+int ConsoleInput::getPlayerCount() {
+    return getNumberInRange("Jumlah pemain", 2, 4);
+}
+
+string ConsoleInput::getPlayerName(int playerIdx) {
+    return getString("Nama pemain " + std::to_string(playerIdx));
+}
+
 int ConsoleInput::getMenuChoice(const vector<string>& options) {
     for (std::size_t i = 0; i < options.size(); ++i) {
         std::cout << i + 1 << ". " << options[i] << "\n";

@@ -4,6 +4,9 @@
 
 class ConsoleInput : public IGameInput {
 public:
+    int getPlayerCount() override;
+    string getPlayerName(int playerIdx) override;
+
     int getMenuChoice(const vector<string>& options) override;
     string getCommand() override;
     bool getYesNo(const string& prompt) override;
