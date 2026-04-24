@@ -59,58 +59,6 @@ Rectangle centeredRect(float centerX, float centerY, float width, float height) 
     };
 }
 
-void drawTileCard(Vector2 pos, float tileSz, const TileView& tv, AssetManager& am) {
-    const RaylibColor groupColor = tileColor(tv.color);
-    const bool hasGroup = (tv.color != ::Color::DEFAULT);
-    const Rectangle tileRect{pos.x, pos.y, tileSz + 0.5f, tileSz + 0.5f};
-
-    DrawRectangleRec(tileRect, hasGroup ? makeColor(250, 250, 248) : makeColor(50, 54, 66));
-
-    if (const Texture2D* tex = am.tileTexture(tv.code)) {
-        const float scale = std::min(tileSz / static_cast<float>(tex->width),
-                                     tileSz / static_cast<float>(tex->height));
-        const float drawW = static_cast<float>(tex->width) * scale;
-        const float drawH = static_cast<float>(tex->height) * scale;
-        Rectangle dest{
-            pos.x + (tileSz - drawW) * 0.5f,
-            pos.y + (tileSz - drawH) * 0.5f,
-            drawW,
-            drawH,
-        };
-        drawSprite(tex, dest);
-    }
-
-    const float photoFrac = 0.62f;
-    const float photoH = tileSz * photoFrac;
-    if (hasGroup) {
-        DrawRectangleRec(Rectangle{pos.x, pos.y, tileSz + 0.5f, photoH},
-                         makeColor(groupColor.r, groupColor.g, groupColor.b, 100));
-        DrawRectangleRec(Rectangle{pos.x, pos.y + photoH, tileSz + 0.5f, tileSz * 0.08f}, groupColor);
-    }
-
-    const float badgeFrac = 0.22f;
-    const float badgeY = pos.y + tileSz * (1.f - badgeFrac);
-    DrawRectangleRec(Rectangle{pos.x, badgeY, tileSz + 0.5f, tileSz * badgeFrac},
-                     makeColor(255, 255, 255, 210));
-
-    const Font& font = am.font("bold");
-    const float fontSize = std::max(tileSz * 0.22f, 8.f);
-    RaylibColor textColor = hasGroup ? groupColor : makeColor(200, 200, 200);
-    if (tv.color == ::Color::YELLOW) {
-        textColor = makeColor(0x90, 0x87, 0x00);
-    }
-    const Vector2 labelSize = measureText(font, tv.code, fontSize);
-    DrawTextEx(font,
-               tv.code.c_str(),
-               Vector2{
-                   pos.x + tileSz * 0.5f - labelSize.x * 0.5f,
-                   badgeY + tileSz * badgeFrac * 0.5f - labelSize.y * 0.5f,
-               },
-               fontSize,
-               kTextSpacing,
-               textColor);
-}
-
 void drawGlobeBackground(int screenW, int screenH) {
     const float cx = static_cast<float>(screenW) * 0.5f;
     const float cy = static_cast<float>(screenH) * 0.5f;

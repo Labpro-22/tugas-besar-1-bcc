@@ -15,8 +15,6 @@ namespace gui::draw {
     Vector2 rectCenter(const Rectangle& rect);
     Rectangle centeredRect(float centerX, float centerY, float width, float height);
 
-    void drawTileCard(Vector2 pos, float tileSz, const TileView& tv, AssetManager& am);
-
     void drawGlobeBackground(int screenW, int screenH);
     void drawGameBackground(int screenW, int screenH);
 

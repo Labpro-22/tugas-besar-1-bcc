@@ -2,8 +2,39 @@
 
 #include "models/Player.hpp"
 #include "models/board/header/Board.hpp"
+#include "tile/header/PropertyTile.hpp"
+#include "tile/header/RailroadTile.hpp"
 #include "tile/header/Tile.hpp"
 #include "tile/header/StreetTile.hpp"
+#include "tile/header/UtilityTile.hpp"
+
+namespace {
+	std::string tileSubtitle(const Tile& tile) {
+		switch (tile.getType()) {
+			case TileType::STREET: return "Property";
+			case TileType::RAILROAD: return "Station";
+			case TileType::UTILITY: return "Utility";
+			case TileType::CHANCE: return "Chance";
+			case TileType::COMMUNITY_CHEST: return "Community Chest";
+			case TileType::FESTIVAL: return "Festival";
+			case TileType::TAX_PPH: return "Income Tax";
+			case TileType::TAX_PBM: return "Luxury Tax";
+			case TileType::GO: return "Collect Salary";
+			case TileType::JAIL: return "Just Visiting";
+			case TileType::FREE_PARKING: return "Take a Break";
+			case TileType::GO_TO_JAIL: return "Move to Jail";
+		}
+		return "";
+	}
+
+	void populatePropertyView(PropertyView& snapshot, const PropertyTile& property) {
+		snapshot.code = property.getCode();
+		snapshot.name = property.getName();
+		snapshot.ownerName = property.getOwner() ? property.getOwner()->getUsername() : "";
+		snapshot.status = property.getStatus();
+		snapshot.buildingLevel = property.getBuildingLevel();
+	}
+}
 
 GameStateView::GameStateView()
 	: currentTurn(0), maxTurn(0), currentPlayerName(""), activePlayerIndex(0), hasRolledDice(false),
@@ -47,14 +78,36 @@ void GameStateView::refresh(const GameState& state, const Board* board) {
 		for (int i = 0; i < board->getSize(); ++i) {
 			Tile* tile = board->getTile(i);
 			if (!tile) continue;
-			TileView tv;
+			TileData tv;
 			tv.index = i;
 			tv.code = tile->getCode();
 			tv.name = tile->getName();
 			tv.type = tile->getType();
 			tv.color = Color::DEFAULT;
+			tv.subtitle = tileSubtitle(*tile);
+
+			if (auto* property = dynamic_cast<PropertyTile*>(tile)) {
+				tv.isOwnable = true;
+				tv.price = property->getPrice().getAmount();
+				tv.mortgageValue = property->getMortgageValue().getAmount();
+				tv.propertyStatus = property->getStatus();
+				tv.ownerName = property->getOwner() ? property->getOwner()->getUsername() : "";
+				tv.isMortgaged = property->isMortgaged();
+				tv.buildingLevel = property->getBuildingLevel();
+
+				PropertyView propertySnapshot;
+				populatePropertyView(propertySnapshot, *property);
+				properties.push_back(propertySnapshot);
+			}
+
 			if (auto* street = dynamic_cast<StreetTile*>(tile)) {
 				tv.color = street->getColor();
+				tv.hasHotel = street->hasHotel();
+				tv.houseCount = street->hasHotel() ? 4 : street->getBuildingLevel();
+			} else if (dynamic_cast<RailroadTile*>(tile)) {
+				tv.color = Color::GRAY;
+			} else if (dynamic_cast<UtilityTile*>(tile)) {
+				tv.color = Color::LIGHT_BLUE;
 			}
 			tiles.push_back(tv);
 		}

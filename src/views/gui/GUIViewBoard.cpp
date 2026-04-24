@@ -12,6 +12,7 @@
 
 #include "GuiMenuLayout.hpp"
 #include "components/GUIViewDraw.hpp"
+#include "renderers/TileRenderer.hpp"
 #endif
 
 namespace {
@@ -99,30 +100,7 @@ void GUIView::showBoard(const GameStateView& state) {
     const float globeY = 0.f;
     const float panelW = (W - globeSize) * 0.5f;
     const float boardSize = H;
-    const Vector2 boardOrigin{(W - boardSize) * 0.5f, 0.f};
-
-    constexpr int edgeCount = 10;
-    constexpr int sideCount = edgeCount + 1;
-    constexpr int totalTiles = edgeCount * 4;
-    const float tileSz = boardSize / static_cast<float>(sideCount);
-
-    auto tilePos = [&](int idx) -> Vector2 {
-        const float edge = tileSz * static_cast<float>(sideCount);
-        const int side = idx / edgeCount;
-        const int offset = idx % edgeCount;
-        switch (side) {
-            case 0:
-                return Vector2{boardOrigin.x + edge - tileSz - offset * tileSz,
-                               boardOrigin.y + edge - tileSz};
-            case 1:
-                return Vector2{boardOrigin.x,
-                               boardOrigin.y + edge - tileSz - offset * tileSz};
-            case 2:
-                return Vector2{boardOrigin.x + offset * tileSz, boardOrigin.y};
-            default:
-                return Vector2{boardOrigin.x + edge - tileSz, boardOrigin.y + offset * tileSz};
-        }
-    };
+    const Rectangle boardBounds{(W - boardSize) * 0.5f, 0.f, boardSize, boardSize};
 
     ClearBackground(BG_COLOR);
 
@@ -141,15 +119,16 @@ void GUIView::showBoard(const GameStateView& state) {
         });
     }
 
-    const int numTiles = std::min<int>(totalTiles, static_cast<int>(state.tiles.size()));
-    for (int i = 0; i < numTiles; ++i) {
-        gui::draw::drawTileCard(tilePos(i), tileSz, state.tiles[static_cast<size_t>(i)], am);
+    const int totalTiles = static_cast<int>(state.tiles.size());
+    for (int i = 0; i < totalTiles; ++i) {
+        const Rectangle tileBounds = gui::tile::boardTileBounds(i, boardBounds, totalTiles);
+        gui::tile::drawTile(state.tiles[static_cast<size_t>(i)],
+                            tileBounds,
+                            gui::tile::boardSideForIndex(i, totalTiles));
     }
 
-    const float tokenR = tileSz * 0.16f;
-    const float tokenSpacing = tileSz * 0.34f;
-    const float tokenBox = tileSz * 0.44f;
-    std::array<std::vector<int>, totalTiles> playersAt{};
+    const float tokenSpacing = boardSize * 0.025f;
+    std::vector<std::vector<int>> playersAt(static_cast<size_t>(std::max(0, totalTiles)));
     for (int p = 0; p < static_cast<int>(state.players.size()); ++p) {
         const auto& player = state.players[static_cast<size_t>(p)];
         if (player.status != PlayerStatus::BANKRUPT) {
@@ -166,9 +145,11 @@ void GUIView::showBoard(const GameStateView& state) {
             continue;
         }
 
-        const Vector2 base = tilePos(i);
-        const float cx = base.x + tileSz * 0.5f;
-        const float cy = base.y + tileSz * 0.5f;
+        const Rectangle tileBounds = gui::tile::boardTileBounds(i, boardBounds, totalTiles);
+        const float cx = tileBounds.x + tileBounds.width * 0.5f;
+        const float cy = tileBounds.y + tileBounds.height * 0.5f;
+        const float tokenBox = std::min(tileBounds.width, tileBounds.height) * 0.44f;
+        const float tokenR = tokenBox * 0.32f;
         std::vector<Vector2> offsets;
         if (stackedPlayers.size() == 1) {
             offsets.push_back(Vector2{0.f, 0.f});

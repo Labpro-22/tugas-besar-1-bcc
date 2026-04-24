@@ -16,7 +16,6 @@ public:
 
 #if NIMONSPOLY_ENABLE_RAYLIB
     const Font& font(const std::string& key);
-    const Texture2D* tileTexture(const std::string& code);
     const Texture2D* texture(const std::string& path);
 #endif
 
@@ -34,6 +33,5 @@ private:
     std::map<std::string, Texture2D> textures_;
 
     void loadFonts();
-    void loadTiles();
 #endif
 };

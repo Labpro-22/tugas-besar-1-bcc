@@ -168,7 +168,14 @@ void CLIView::showBoard(const GameStateView& state) {
 
     // Safe tile/prop accessors
     const int TOTAL_TILES = static_cast<int>(state.tiles.size());
-    static const TileView EMPTY_TILE{0, "---", "---", TileType::GO, Color::DEFAULT};
+    static const TileView EMPTY_TILE = [] {
+        TileView tile;
+        tile.code = "---";
+        tile.name = "---";
+        tile.type = TileType::GO;
+        tile.color = Color::DEFAULT;
+        return tile;
+    }();
     auto getTile = [&](int idx) -> const TileView& {
         if (idx < 0 || idx >= TOTAL_TILES) return EMPTY_TILE;
         return state.tiles[static_cast<size_t>(idx)];

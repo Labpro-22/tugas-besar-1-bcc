@@ -80,14 +80,26 @@ public:
     int buildingLevel;
 };
 
-class TileView{
+class TileData{
 public:
-    int index;
+    int index{0};
     string code;
     string name;
-    TileType type;
-    Color color;
+    TileType type{TileType::GO};
+    Color color{Color::DEFAULT};
+    int price{0};
+    int mortgageValue{0};
+    string subtitle;
+    PropertyStatus propertyStatus{PropertyStatus::BANK};
+    string ownerName;
+    bool isOwnable{false};
+    bool isMortgaged{false};
+    int buildingLevel{0};
+    int houseCount{0};
+    bool hasHotel{false};
 };
+
+using TileView = TileData;
 
 class AuctionDecision{
 public:

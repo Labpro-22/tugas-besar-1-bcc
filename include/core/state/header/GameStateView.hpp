@@ -12,7 +12,7 @@ class Board;
 // Task 5 (GameEngine) populates this; UI layer only reads it.
 class GameStateView {
 public:
-    vector<TileView>    tiles;           // all board tiles in index order (0-based)
+    vector<TileData>    tiles;           // all board tiles in index order (0-based)
     vector<PlayerView>  players;         // all players (including bankrupt)
     vector<PropertyView> properties;     // all ownable properties
 
