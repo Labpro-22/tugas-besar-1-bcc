@@ -1,6 +1,9 @@
 #include "core/state/header/GameStateView.hpp"
 
 #include "models/Player.hpp"
+#include "models/board/header/Board.hpp"
+#include "tile/header/Tile.hpp"
+#include "tile/header/StreetTile.hpp"
 
 GameStateView::GameStateView()
 	: currentTurn(0), maxTurn(0), currentPlayerName(""), activePlayerIndex(0), hasRolledDice(false),
@@ -10,7 +13,7 @@ GameStateView::GameStateView(const GameState& state) : GameStateView() {
 	refresh(state);
 }
 
-void GameStateView::refresh(const GameState& state) {
+void GameStateView::refresh(const GameState& state, const Board* board) {
 	currentTurn = state.getCurrentTurn();
 	maxTurn = state.getMaxTurn();
 	activePlayerIndex = state.getActivePlayerIndex();
@@ -38,6 +41,24 @@ void GameStateView::refresh(const GameState& state) {
 	}
 
 	properties.clear();
+
+	tiles.clear();
+	if (board) {
+		for (int i = 0; i < board->getSize(); ++i) {
+			Tile* tile = board->getTile(i);
+			if (!tile) continue;
+			TileView tv;
+			tv.index = i;
+			tv.code = tile->getCode();
+			tv.name = tile->getName();
+			tv.type = tile->getType();
+			tv.color = Color::DEFAULT;
+			if (auto* street = dynamic_cast<StreetTile*>(tile)) {
+				tv.color = street->getColor();
+			}
+			tiles.push_back(tv);
+		}
+	}
 }
 
 int GameStateView::getCurrentTurn() const {

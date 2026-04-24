@@ -65,9 +65,8 @@ void GUIView::drawLandingPage() {
         rw.draw(rs2);
     }
 
-    unsigned subSz = static_cast<unsigned>(H * 0.022f);
-    // gui::draw::drawCenteredText(rw, am, "title", "presented by BurntCheesecake", subSz,
-                                // sf::Color(210, 220, 235), cy + H * 0.12f);
+    // gui::draw::drawCenteredText(rw, am, "title", "presented by BurntCheesecake",
+    //     static_cast<unsigned>(H * 0.022f), sf::Color(210, 220, 235), cy + H * 0.12f);
 
     const char* items[] = {"New Game", "Load Game", "Credits", "Exit"};
     const float btnH = H * 0.058f;

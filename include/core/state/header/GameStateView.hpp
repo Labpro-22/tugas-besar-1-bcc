@@ -6,6 +6,8 @@
 #include "core/state/header/GameState.hpp"
 #include "utils/Types.hpp"
 
+class Board;
+
 // Read-only snapshot passed to IGameView::showBoard() and other render calls.
 // Task 5 (GameEngine) populates this; UI layer only reads it.
 class GameStateView {
@@ -24,7 +26,7 @@ public:
 	GameStateView();
 	explicit GameStateView(const GameState& state);
 
-	void refresh(const GameState& state);
+	void refresh(const GameState& state, const Board* board = nullptr);
 
 	int getCurrentTurn() const;
 	int getMaxTurn() const;

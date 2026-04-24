@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <array>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -18,103 +19,90 @@
 [[maybe_unused]] static constexpr float RP_W_FRAC  = 0.16f;
 [[maybe_unused]] static constexpr float BOT_H_FRAC = 0.20f;
 
+#if NIMONSPOLY_ENABLE_SFML
+// Dark premium palette
+static const sf::Color BG_COLOR(0x06, 0x09, 0x12);
+static const sf::Color PANEL_BG(0x08, 0x0c, 0x14);
+static const sf::Color PANEL_BORDER(0x5c, 0xd6, 0xff, 40);
+static const sf::Color ACCENT_CYAN(0x5c, 0xd6, 0xff);
+static const sf::Color ACCENT_GOLD(0xff, 0xc1, 0x07);
+static const sf::Color TEXT_PRIMARY(0xe8, 0xed, 0xf2);
+static const sf::Color TEXT_MUTED(0x7a, 0x85, 0x98);
+static const sf::Color TEXT_GREEN(0x00, 0xd9, 0x8e);
+static const sf::Color BTN_BG(0x12, 0x1a, 0x2e);
+static const sf::Color BTN_BORDER(0x2a, 0x3f, 0x5c);
+// (separator borders removed — tiles sit flush)
+#endif
+
 void GUIView::showBoard(const GameStateView& state) {
 #if NIMONSPOLY_ENABLE_SFML
     if (!window) return;
-
     sf::RenderWindow& rw = *window;
     AssetManager& am = AssetManager::get();
 
     const float W = static_cast<float>(rw.getSize().x);
     const float H = static_cast<float>(rw.getSize().y);
-    const float lpW  = W * LP_W_FRAC;
-    const float rpW  = W * RP_W_FRAC;
-    const float botH = H * BOT_H_FRAC;
 
-    // Card section paddings matching drawLeftPanel / drawRightPanel
-    const float leftCardPadX  = lpW * 0.07f;
-    const float rightCardPadX = rpW * 0.08f;
+    // Globe fills full height, square, centered horizontally.
+    const float globeSize = H;
+    const float globeX = (W - globeSize) * 0.5f;
+    const float globeY = 0.f;
 
-    const float boardLeft   = lpW - leftCardPadX;
-    const float boardRight  = W - rpW + rightCardPadX;
-    const float boardTop    = 0.f;
-    const float boardBottom = H - botH;
+    // Side panels width adapts to leftover space.
+    const float panelW = (W - globeSize) * 0.5f;
 
-    const float cW = boardRight - boardLeft;
-    const float cH = boardBottom - boardTop;
-
-    const float boardSz = std::min(cW, cH) * 0.97f;
-    const sf::Vector2f origin{
-        boardLeft + (cW - boardSz) * 0.5f,
-        boardTop + (cH - boardSz) * 0.5f,
+    // Board fills 100% of window height, tiles hugging the globe edge-to-edge.
+    // Board fills full window, tiles use exact float size — no snapping, no gaps.
+    const float boardSize = H;
+    const sf::Vector2f boardOrigin{
+        (W - boardSize) * 0.5f,
+        0.f,
     };
 
-    constexpr int EDGE  = 10;
-    constexpr int SIDE  = EDGE + 1;
+    constexpr int EDGE = 10;
+    constexpr int SIDE = EDGE + 1;
     constexpr int TOTAL = EDGE * 4;
-    const float tileSz  = boardSz / static_cast<float>(SIDE);
-    const float innerSz = boardSz - 2.0f * tileSz;
+    const float tileSz = boardSize / static_cast<float>(SIDE);
 
     auto tilePos = [&](int idx) -> sf::Vector2f {
         const float edge = tileSz * static_cast<float>(SIDE);
         const int   sd   = idx / EDGE;
         const int   off  = idx % EDGE;
         switch (sd) {
-            case 0:  return {origin.x + edge - tileSz - off * tileSz, origin.y + edge - tileSz};
-            case 1:  return {origin.x,                                 origin.y + edge - tileSz - off * tileSz};
-            case 2:  return {origin.x + off * tileSz,                  origin.y};
-            default: return {origin.x + edge - tileSz,                 origin.y + off * tileSz};
+            case 0:  return {boardOrigin.x + edge - tileSz - off * tileSz, boardOrigin.y + edge - tileSz};
+            case 1:  return {boardOrigin.x,                                 boardOrigin.y + edge - tileSz - off * tileSz};
+            case 2:  return {boardOrigin.x + off * tileSz,                  boardOrigin.y};
+            default: return {boardOrigin.x + edge - tileSz,                 boardOrigin.y + off * tileSz};
         }
     };
 
-    rw.clear(sf::Color(0, 0, 0));
+    rw.clear(BG_COLOR);
 
-    const sf::Texture* globeTex = am.texture("assets/bg/Globe.png");
+    // ---- Globe (behind everything) ----
+    const sf::Texture* globeTex = am.texture("assets/bg/GlobeWShadow.png");
     if (globeTex) {
-        gui::draw::drawSpriteCover(rw, globeTex);
-    } else {
-        gui::draw::drawGameBackground(rw);
+        gui::draw::drawSprite(rw, globeTex, {{globeX, globeY}, {globeSize, globeSize}});
     }
 
-    const sf::Vector2f innerCenter{origin.x + boardSz * 0.5f,
-                                   origin.y + boardSz * 0.5f};
-
+    // ---- Title (small, centered in the middle of the globe, raised 20px) ----
     const sf::Texture* titleTex = am.texture("assets/bg/Title.png");
     if (titleTex) {
-        auto tsz2 = titleTex->getSize();
-        float titleW = innerSz * 0.68f;
-        float titleH = titleW * static_cast<float>(tsz2.y) / static_cast<float>(tsz2.x);
-        sf::RenderStates addBlend;
-        addBlend.blendMode = sf::BlendAdd;
-        gui::draw::drawSprite(rw, titleTex,
-                              {{innerCenter.x - titleW * 0.5f,
-                                innerCenter.y - titleH * 0.58f},
-                               {titleW, titleH}},
-                              addBlend);
-    } else {
-        float logoSz = innerSz * 0.28f;
-        unsigned charSz = static_cast<unsigned>(logoSz);
-        sf::Text line1(am.font("title"), std::string("NIMONS"), charSz);
-        sf::Text line2(am.font("title"), std::string("POLY"),   charSz);
-        line1.setFillColor(sf::Color(235, 240, 248));
-        line2.setFillColor(sf::Color(235, 240, 248));
-        auto b1 = line1.getLocalBounds();
-        auto b2 = line2.getLocalBounds();
-        line1.setOrigin({b1.position.x + b1.size.x * 0.5f, b1.position.y + b1.size.y});
-        line2.setOrigin({b2.position.x + b2.size.x * 0.5f, b2.position.y});
-        line1.setPosition({innerCenter.x, innerCenter.y - logoSz * 0.08f});
-        line2.setPosition({innerCenter.x, innerCenter.y + logoSz * 0.08f});
-        rw.draw(line1);
-        rw.draw(line2);
+        float titleW = W * 0.28f;
+        float scale = titleW / static_cast<float>(titleTex->getSize().x);
+        float titleH = static_cast<float>(titleTex->getSize().y) * scale;
+        float titleX = (W - titleW) * 0.5f;
+        float titleY = (H - titleH) * 0.5f - 20.f;
+        gui::draw::drawSprite(rw, titleTex, {{titleX, titleY}, {titleW, titleH}});
     }
 
+    // ---- Tiles (no borders/separators — tiles sit flush against each other) ----
     const int numTiles = std::min<int>(TOTAL, static_cast<int>(state.tiles.size()));
     for (int i = 0; i < numTiles; ++i)
         gui::draw::drawTileCard(rw, tilePos(i), tileSz, state.tiles[static_cast<size_t>(i)], am);
 
-    const float tokenR       = tileSz * 0.16f;
+    // ---- Player tokens ----
+    const float tokenR = tileSz * 0.16f;
     const float tokenSpacing = tokenR * 2.4f;
-
     std::array<std::vector<int>, TOTAL> playersAt{};
     for (int p = 0; p < static_cast<int>(state.players.size()); ++p) {
         const auto& pv = state.players[static_cast<size_t>(p)];
@@ -144,9 +132,36 @@ void GUIView::showBoard(const GameStateView& state) {
         }
     }
 
-    drawLeftPanel (rw, state);
-    drawRightPanel(rw, state);
-    drawBottomStrip(rw, state);
+    drawLeftPanel(rw, state, panelW, H);
+    drawRightPanel(rw, state, panelW, H);
+
+    // Save/load status toast
+    if (saveLoadStatusFrames_ > 0) {
+        --saveLoadStatusFrames_;
+        const float toastW = W * 0.40f;
+        const float toastH = static_cast<float>(rw.getSize().y) * 0.06f;
+        const float tx = W * 0.5f;
+        const float ty = static_cast<float>(rw.getSize().y) * 0.04f + toastH * 0.5f;
+        sf::RectangleShape toast({toastW, toastH});
+        toast.setOrigin({toastW * 0.5f, toastH * 0.5f});
+        toast.setPosition({tx, ty});
+        toast.setFillColor(sf::Color(30, 50, 80, 220));
+        toast.setOutlineThickness(1.5f);
+        toast.setOutlineColor(sf::Color(80, 130, 200));
+        rw.draw(toast);
+
+        unsigned tsz = static_cast<unsigned>(toastH * 0.40f);
+        sf::Text t(am.font("regular"), saveLoadStatus_, tsz);
+        t.setFillColor(sf::Color(230, 240, 255));
+        auto tb = t.getLocalBounds();
+        t.setOrigin({tb.position.x + tb.size.x * 0.5f, tb.position.y + tb.size.y * 0.5f});
+        t.setPosition({tx, ty});
+        rw.draw(t);
+    }
+
+    if (currentPrompt_ && currentPrompt_->type != GUIPromptType::NONE && !currentPrompt_->resolved) {
+        renderPromptOverlay(*currentPrompt_);
+    }
 
     rw.display();
 #else
@@ -154,382 +169,652 @@ void GUIView::showBoard(const GameStateView& state) {
 #endif
 }
 
-void GUIView::drawLeftPanel(sf::RenderWindow& rw, const GameStateView& state) {
+void GUIView::drawLeftPanel(sf::RenderWindow& rw, const GameStateView& state,
+                            float panelW, float H) {
+#if NIMONSPOLY_ENABLE_SFML
+    AssetManager& am = AssetManager::get();
+    const float pad = 14.f;
+
+    // Panel background
+    sf::RectangleShape panel({panelW, H});
+    panel.setPosition({0.f, 0.f});
+    panel.setFillColor(PANEL_BG);
+    rw.draw(panel);
+
+    // Right edge subtle glow line
+    sf::RectangleShape edgeLine({2.f, H});
+    edgeLine.setPosition({panelW - 1.f, 0.f});
+    edgeLine.setFillColor(PANEL_BORDER);
+    rw.draw(edgeLine);
+
+    float y = pad;
+
+    // ---- Title ----
+    {
+        sf::Text t(am.font("extrabold"), "NIMONSPOLY", static_cast<unsigned>(panelW * 0.13f));
+        t.setFillColor(ACCENT_CYAN);
+        auto b = t.getLocalBounds();
+        t.setOrigin({b.position.x + b.size.x * 0.5f, b.position.y});
+        t.setPosition({panelW * 0.5f, y});
+        rw.draw(t);
+        y += panelW * 0.13f + 6.f;
+    }
+
+    // ---- Round info ----
+    {
+        std::string roundStr = "Round  " + std::to_string(state.currentTurn)
+                             + " / " + std::to_string(state.maxTurn);
+        sf::Text t(am.font("regular"), roundStr, static_cast<unsigned>(panelW * 0.07f));
+        t.setFillColor(TEXT_MUTED);
+        auto b = t.getLocalBounds();
+        t.setOrigin({b.position.x + b.size.x * 0.5f, b.position.y});
+        t.setPosition({panelW * 0.5f, y});
+        rw.draw(t);
+        y += panelW * 0.07f + 18.f;
+    }
+
+    // ---- Separator ----
+    {
+        sf::RectangleShape sep({panelW - pad * 2.f, 1.f});
+        sep.setPosition({pad, y});
+        sep.setFillColor(sf::Color(255, 255, 255, 25));
+        rw.draw(sep);
+        y += 16.f;
+    }
+
+    // ---- Player List ----
+    const sf::Color tcols[] = {
+        sf::Color(0x00,0xc8,0xff), sf::Color(0xff,0x2d,0x8a),
+        sf::Color(0xff,0xf2,0x00), sf::Color(0x00,0xff,0xb0)
+    };
+
+    float rowH = 42.f;
+    for (int i = 0; i < static_cast<int>(state.players.size()); ++i) {
+        const auto& pv = state.players[static_cast<size_t>(i)];
+        bool active   = (pv.username == state.currentPlayerName);
+        bool bankrupt = (pv.status == PlayerStatus::BANKRUPT);
+
+        // Active highlight bar
+        if (active) {
+            sf::RectangleShape hl({panelW - pad * 0.5f, rowH});
+            hl.setPosition({pad * 0.25f, y});
+            hl.setFillColor(sf::Color(tcols[i % 4].r, tcols[i % 4].g, tcols[i % 4].b, 35));
+            hl.setOutlineThickness(1.f);
+            hl.setOutlineColor(sf::Color(tcols[i % 4].r, tcols[i % 4].g, tcols[i % 4].b, 90));
+            rw.draw(hl);
+        }
+
+        // Color dot
+        float dotR = 6.f;
+        sf::CircleShape dot(dotR);
+        dot.setFillColor(bankrupt ? sf::Color(100, 100, 110) : tcols[i % 4]);
+        dot.setOrigin({dotR, dotR});
+        dot.setPosition({pad + dotR + 4.f, y + rowH * 0.5f});
+        rw.draw(dot);
+
+        // Name
+        std::string displayName = pv.username;
+        if (displayName.size() > 12) displayName = displayName.substr(0, 10) + "..";
+        sf::Text nameTxt(am.font("bold"), displayName, static_cast<unsigned>(panelW * 0.065f));
+        nameTxt.setFillColor(bankrupt ? sf::Color(100, 105, 115) : (active ? TEXT_PRIMARY : TEXT_MUTED));
+        nameTxt.setPosition({pad + dotR * 2.f + 12.f, y + 4.f});
+        rw.draw(nameTxt);
+
+        // Money
+        std::string moneyStr = "M" + std::to_string(pv.money.getAmount());
+        sf::Text moneyTxt(am.font("regular"), moneyStr, static_cast<unsigned>(panelW * 0.055f));
+        moneyTxt.setFillColor(bankrupt ? sf::Color(100, 105, 115) : TEXT_GREEN);
+        moneyTxt.setPosition({pad + dotR * 2.f + 12.f, y + rowH * 0.52f});
+        rw.draw(moneyTxt);
+
+        // Bankrupt tag
+        if (bankrupt) {
+            sf::Text tag(am.font("bold"), "BANKRUPT", static_cast<unsigned>(panelW * 0.05f));
+            tag.setFillColor(sf::Color(0xff, 0x4d, 0x4d));
+            tag.setPosition({panelW - pad - 60.f, y + rowH * 0.3f});
+            rw.draw(tag);
+        }
+
+        y += rowH + 4.f;
+    }
+
+    y += 10.f;
+
+    // ---- Separator ----
+    {
+        sf::RectangleShape sep({panelW - pad * 2.f, 1.f});
+        sep.setPosition({pad, y});
+        sep.setFillColor(sf::Color(255, 255, 255, 25));
+        rw.draw(sep);
+        y += 16.f;
+    }
+
+    // ---- Game Log ----
+    {
+        sf::Text hdr(am.font("bold"), "GAME LOG", static_cast<unsigned>(panelW * 0.07f));
+        hdr.setFillColor(TEXT_PRIMARY);
+        auto hb = hdr.getLocalBounds();
+        hdr.setOrigin({hb.position.x + hb.size.x * 0.5f, hb.position.y});
+        hdr.setPosition({panelW * 0.5f, y});
+        rw.draw(hdr);
+        y += panelW * 0.07f + 10.f;
+
+        int total = static_cast<int>(log_.size());
+        float lineH = 18.f;
+        float maxLogH = H - y - pad;
+        float usedH = 0;
+        struct Entry { int idx; std::vector<std::string> lines; };
+        std::vector<Entry> visible;
+
+        for (int li = total - 1; li >= 0; --li) {
+            const auto& e = log_[static_cast<size_t>(li)];
+            std::string full = "[" + e.username + "] " + e.detail;
+            auto wrapped = gui::draw::wrapText(am, "regular", full,
+                                               static_cast<unsigned>(panelW * 0.055f),
+                                               panelW - pad * 2.f);
+            float h = wrapped.size() * lineH;
+            if (usedH + h > maxLogH) break;
+            visible.push_back({li, wrapped});
+            usedH += h;
+        }
+
+        float drawY = y;
+        for (auto it = visible.rbegin(); it != visible.rend(); ++it) {
+            sf::Color lc = (it->idx == total - 1) ? TEXT_PRIMARY : TEXT_MUTED;
+            for (const auto& wl : it->lines) {
+                sf::Text lt(am.font("regular"), wl, static_cast<unsigned>(panelW * 0.055f));
+                lt.setFillColor(lc);
+                lt.setPosition({pad, drawY});
+                rw.draw(lt);
+                drawY += lineH;
+            }
+        }
+        if (log_.empty()) {
+            sf::Text lt(am.font("regular"), "No events yet", static_cast<unsigned>(panelW * 0.055f));
+            lt.setFillColor(TEXT_MUTED);
+            lt.setPosition({pad, drawY});
+            rw.draw(lt);
+        }
+    }
+#else
+    (void)rw; (void)state; (void)panelW; (void)H;
+#endif
+}
+
+void GUIView::drawRightPanel(sf::RenderWindow& rw, const GameStateView& state,
+                             float panelW, float H) {
 #if NIMONSPOLY_ENABLE_SFML
     AssetManager& am = AssetManager::get();
     const float W = static_cast<float>(rw.getSize().x);
-    const float H = static_cast<float>(rw.getSize().y);
-    const float lpW  = W * LP_W_FRAC;
-    const float botH = H * BOT_H_FRAC;
-    const float panH = H - botH;
-    const float colPadX = lpW * 0.07f;
-    const float colPadY = lpW * 0.06f;
-    const float colW = lpW - colPadX * 2.f;
-    const float colH = panH - colPadY * 2.f;
-    const float gapY = colPadY * 0.9f;
-    const float colX = colPadX;
-    const float pad  = colW * 0.07f;
+    const float px = W - panelW;
+    const float pad = 14.f;
 
-    unsigned bodySz = static_cast<unsigned>(colW * 0.10f);
-    unsigned smSz   = static_cast<unsigned>(colW * 0.085f);
+    // Panel background
+    sf::RectangleShape panel({panelW, H});
+    panel.setPosition({px, 0.f});
+    panel.setFillColor(PANEL_BG);
+    rw.draw(panel);
 
-    const float sumCardH = colH * 0.36f;
-    const float plrCardH = colH - sumCardH - gapY;
-    const float sumCardY = colPadY;
-    const float plrCardY = sumCardY + sumCardH + gapY;
+    // Left edge subtle glow line
+    sf::RectangleShape edgeLine({2.f, H});
+    edgeLine.setPosition({px, 0.f});
+    edgeLine.setFillColor(PANEL_BORDER);
+    rw.draw(edgeLine);
 
-    const sf::Texture* sumTex = am.texture("assets/components/card/EmptyCard.png");
-    const sf::Texture* plrTex = am.texture("assets/components/card/EmptyCard.png");
+    float y = pad;
 
-    if (sumTex) {
-        gui::draw::drawSprite(rw, sumTex, {{colX, sumCardY}, {colW, sumCardH}});
-    } else {
-        gui::draw::drawPanel(rw, {{colX, sumCardY}, {colW, sumCardH}}, sf::Color(0x17, 0x28, 0x48, 200));
-    }
-    {
-        unsigned hSz2 = static_cast<unsigned>(colW * 0.13f);
-        gui::draw::drawLabel(rw, am, "title", "GAME SUMMARY", hSz2,
-                             sf::Color(45, 65, 100), {colX + pad, sumCardY + pad * 0.6f});
-    }
+    // ---- Action Buttons Grid 2x3 ----
+    const char* actionLabels[] = {"TEBUS", "BANGUN", "GADAI", "KARTU", "SIMPAN", "SELESAI"};
+    float btnW = (panelW - pad * 2.f - 8.f) * 0.5f;
+    float btnH = 40.f;
+    float gapX = 8.f;
+    float gapY = 8.f;
 
-    if (plrTex) {
-        gui::draw::drawSprite(rw, plrTex, {{colX, plrCardY}, {colW, plrCardH}});
-    } else {
-        gui::draw::drawPanel(rw, {{colX, plrCardY}, {colW, plrCardH}}, sf::Color(0x10, 0x1c, 0x38, 230));
-    }
-    {
-        unsigned hSz2 = static_cast<unsigned>(colW * 0.13f);
-        gui::draw::drawLabel(rw, am, "title", "PLAYERS", hSz2,
-                             sf::Color(45, 65, 100), {colX + pad, plrCardY + pad * 0.6f});
-    }
+    for (int i = 0; i < 6; ++i) {
+        int col = i % 2;
+        int row = i / 2;
+        float bx = px + pad + col * (btnW + gapX);
+        float by = y + row * (btnH + gapY);
 
-    {
-        float y = sumCardY + sumCardH * 0.17f;
+        sf::RectangleShape btn({btnW, btnH});
+        btn.setPosition({bx, by});
+        btn.setFillColor(BTN_BG);
+        btn.setOutlineThickness(1.f);
+        btn.setOutlineColor(BTN_BORDER);
+        rw.draw(btn);
 
-        std::string roundStr = "Round  " + std::to_string(state.currentTurn)
-                             + " / " + std::to_string(state.maxTurn);
-        gui::draw::drawLabel(rw, am, "regular", roundStr, bodySz,
-                             sf::Color(55, 75, 110), {colX + pad, y});
-        y += bodySz * 1.8f;
-
-        const sf::Color tcols[] = {
-            sf::Color(0x00,0xc8,0xff), sf::Color(0xff,0x2d,0x8a),
-            sf::Color(0xff,0xf2,0x00), sf::Color(0x00,0xff,0xb0)
-        };
-        float tx   = colX + pad;
-        float ty   = y + smSz * 0.5f;
-        float dotR = smSz * 0.55f;
-        for (int i = 0; i < static_cast<int>(state.players.size()) && i < 4; ++i) {
-            bool bankrupt = state.players[static_cast<size_t>(i)].status == PlayerStatus::BANKRUPT;
-            sf::CircleShape dot(dotR);
-            dot.setFillColor(bankrupt ? sf::Color(160, 160, 170) : tcols[i % 4]);
-            dot.setOrigin({dotR, dotR});
-            dot.setPosition({tx + dotR, ty});
-            rw.draw(dot);
-            std::string nm  = state.players[static_cast<size_t>(i)].username;
-            std::string ini = nm.empty() ? "?" : std::string(1, nm[0]);
-            sf::Text t(am.font("bold"), ini, static_cast<unsigned>(dotR * 1.1f));
-            t.setFillColor(sf::Color(0, 0, 0, bankrupt ? 80 : 220));
-            auto b = t.getLocalBounds();
-            t.setOrigin({b.position.x + b.size.x * 0.5f, b.position.y + b.size.y * 0.5f});
-            t.setPosition({tx + dotR, ty});
-            rw.draw(t);
-            tx += dotR * 2.8f;
-        }
-    }
-
-    {
-        float contentY = plrCardY + plrCardH * 0.17f;
-        float y = contentY;
-
-        const sf::Color tcols[] = {
-            sf::Color(0x00,0xc8,0xff), sf::Color(0xff,0x2d,0x8a),
-            sf::Color(0xff,0xf2,0x00), sf::Color(0x00,0xff,0xb0)
-        };
-        float rowH = (plrCardY + plrCardH - pad - contentY)
-               / std::max(1, static_cast<int>(state.players.size()));
-        rowH = std::min(rowH, plrCardH * 0.18f);
-
-        for (int i = 0; i < static_cast<int>(state.players.size()); ++i) {
-            const auto& pv = state.players[static_cast<size_t>(i)];
-            bool active   = (pv.username == state.currentPlayerName);
-            bool bankrupt = (pv.status == PlayerStatus::BANKRUPT);
-
-            if (active) {
-                sf::RectangleShape hl({colW - pad * 0.5f, rowH - pad * 0.2f});
-                hl.setPosition({colX + pad * 0.25f, y});
-                hl.setFillColor(sf::Color(tcols[i % 4].r, tcols[i % 4].g, tcols[i % 4].b, 40));
-                hl.setOutlineThickness(1.f);
-                hl.setOutlineColor(sf::Color(tcols[i % 4].r, tcols[i % 4].g, tcols[i % 4].b, 100));
-                rw.draw(hl);
-            }
-
-            float dotR = rowH * 0.22f;
-            sf::CircleShape dot(dotR);
-            dot.setFillColor(bankrupt ? sf::Color(160, 160, 170) : tcols[i % 4]);
-            dot.setOrigin({dotR, dotR});
-            dot.setPosition({colX + pad + dotR, y + rowH * 0.3f});
-            rw.draw(dot);
-
-            sf::Color nameCol = bankrupt ? sf::Color(140, 145, 155)
-                              : active   ? sf::Color(20, 35, 60)
-                                         : sf::Color(50, 70, 100);
-            gui::draw::drawLabel(rw, am, "bold", pv.username, bodySz, nameCol,
-                                 {colX + pad + dotR * 2.8f, y + rowH * 0.08f});
-
-            std::string moneyStr = "M" + std::to_string(pv.money.getAmount());
-            gui::draw::drawLabel(rw, am, "regular", moneyStr, smSz,
-                                 bankrupt ? sf::Color(140, 145, 155) : sf::Color(20, 110, 70),
-                                 {colX + pad + dotR * 2.8f, y + rowH * 0.52f});
-
-            std::string propStr = std::to_string(pv.propertyCount) + " prop";
-            gui::draw::drawLabel(rw, am, "regular", propStr, smSz,
-                                 sf::Color(90, 110, 145),
-                                 {colX + pad + dotR * 2.8f + colW * 0.28f, y + rowH * 0.52f});
-
-            if (bankrupt) {
-                gui::draw::drawLabel(rw, am, "bold", "BANKRUPT", smSz,
-                                     sf::Color(180, 50, 50), {colX + pad, y + rowH * 0.75f});
-            }
-
-            y += rowH;
-        }
-    }
-#else
-    (void)rw; (void)state;
-#endif
-}
-
-void GUIView::drawRightPanel(sf::RenderWindow& rw, const GameStateView& state) {
-#if NIMONSPOLY_ENABLE_SFML
-    AssetManager& am = AssetManager::get();
-    const float W   = static_cast<float>(rw.getSize().x);
-    const float H   = static_cast<float>(rw.getSize().y);
-    const float rpW = W * RP_W_FRAC;
-    const float rpX = W - rpW;
-    const float padX = rpW * 0.08f;
-    const float padY = rpW * 0.08f;
-    const float colW = rpW - padX * 2.f;
-
-    unsigned hSz  = static_cast<unsigned>(colW * 0.09f);
-    unsigned smSz = static_cast<unsigned>(colW * 0.07f);
-
-    float y = padY;
-
-    {
-        float logH = H * 0.42f;
-        const sf::Texture* logCardTex = am.texture("assets/components/card/EmptyCard.png");
-        if (logCardTex) {
-            gui::draw::drawSprite(rw, logCardTex, {{rpX + padX, y}, {colW, logH}});
-        } else {
-            gui::draw::drawPanel(rw, {{rpX + padX, y}, {colW, logH}},
-                                 sf::Color(0x0d, 0x1a, 0x30, 230));
-        }
-        gui::draw::drawLabel(rw, am, "title", "GAME LOG", hSz,
-                             sf::Color(45, 65, 100), {rpX + padX + padX * 0.4f, y + padY * 0.5f});
-
-        const float logPad = colW * 0.06f;
-        float logContentY = y + logH * 0.17f;
-        float lineH    = smSz * 1.55f;
-        int   maxLines = static_cast<int>((logH * 0.83f) / lineH);
-
-        int total = static_cast<int>(log_.size());
-        int start = std::max(0, total - maxLines - logScrollOffset_);
-        int end   = std::min(total, start + maxLines);
-
-        for (int li = start; li < end; ++li) {
-            const auto& e = log_[static_cast<size_t>(li)];
-            std::string line = "[" + e.username + "] " + e.detail;
-            if (line.size() > 28) line = line.substr(0, 26) + "..";
-            sf::Color lc = (li == total - 1) ? sf::Color(25, 45, 85)
-                                              : sf::Color(70, 95, 135);
-            gui::draw::drawLabel(rw, am, "regular", line, smSz, lc,
-                                 {rpX + padX + logPad, logContentY + (li - start) * lineH});
-        }
-        if (log_.empty()) {
-            gui::draw::drawLabel(rw, am, "regular", "No events yet", smSz,
-                                 sf::Color(90, 115, 155),
-                                 {rpX + padX + logPad, logContentY});
-        }
-        y += logH + padY * 0.8f;
-    }
-
-    {
-        const char* actions[] = {"Buy", "Build", "Mortgage", "Card"};
-        const sf::Texture* squareBtnTex = am.texture("assets/components/btn/EmptySquareBtn.png");
-        float btnSz = std::min(colW * 0.46f, H * 0.12f);
-        float gap = btnSz * 0.18f;
-        float gridW = btnSz * 2.f + gap;
-        float startX = rpX + padX + (colW - gridW) * 0.5f + btnSz * 0.5f;
-        float startY = y + btnSz * 0.5f;
-        for (int i = 0; i < 4; ++i) {
-            int col = i % 2;
-            int row = i / 2;
-            float bx = startX + col * (btnSz + gap);
-            float by = startY + row * (btnSz + gap);
-            if (squareBtnTex) {
-                gui::draw::drawSprite(rw, squareBtnTex,
-                                      {{bx - btnSz * 0.5f, by - btnSz * 0.5f}, {btnSz, btnSz}});
-                unsigned csz = static_cast<unsigned>(btnSz * 0.24f);
-                sf::Text t(am.font("bold"), actions[i], csz);
-                t.setFillColor(sf::Color(45, 65, 100));
-                auto b = t.getLocalBounds();
-                t.setOrigin({b.position.x + b.size.x * 0.5f, b.position.y + b.size.y * 0.5f});
-                t.setPosition({bx, by});
-                rw.draw(t);
-            } else {
-                gui::draw::drawMenuButton(rw, am, actions[i], {bx, by}, {btnSz, btnSz}, false);
-            }
-        }
-        y += 2.f * (btnSz + gap) + padY * 0.6f;
-    }
-
-    {
-        float btnW = colW;
-        float btnH = H * 0.14f;
-        float bx   = rpX + rpW * 0.5f;
-        float by   = H - padY - btnH * 0.5f;
-        bool disabled = diceRolled_;
-
-        const sf::Texture* rectBtnTex = am.texture("assets/components/btn/EmptyRectBtn.png");
-        if (rectBtnTex && !disabled) {
-            gui::draw::drawSprite(rw, rectBtnTex,
-                                  {{bx - btnW * 0.5f, by - btnH * 0.5f}, {btnW, btnH}});
-        } else {
-            sf::RectangleShape btn({btnW, btnH});
-            btn.setOrigin({btnW * 0.5f, btnH * 0.5f});
-            btn.setPosition({bx, by});
-            btn.setFillColor(disabled ? sf::Color(0xd0, 0xd8, 0xe4, 180)
-                                      : sf::Color(0xb8, 0xcc, 0xe0));
-            btn.setOutlineThickness(1.5f);
-            btn.setOutlineColor(disabled ? sf::Color(160, 170, 190)
-                                         : sf::Color(80, 130, 200));
-            rw.draw(btn);
-        }
-
-        unsigned tsz = static_cast<unsigned>(btnH * 0.36f);
-        sf::Text t(am.font("title"), "Lempar Dadu", tsz);
-        t.setFillColor(disabled ? sf::Color(145, 155, 175) : sf::Color(25, 45, 85));
+        sf::Text t(am.font("bold"), actionLabels[i], static_cast<unsigned>(btnH * 0.38f));
+        t.setFillColor(TEXT_PRIMARY);
         auto b = t.getLocalBounds();
         t.setOrigin({b.position.x + b.size.x * 0.5f, b.position.y + b.size.y * 0.5f});
-        t.setPosition({bx, by});
+        t.setPosition({bx + btnW * 0.5f, by + btnH * 0.5f});
         rw.draw(t);
     }
+    y += 3.f * (btnH + gapY) + 18.f;
 
-    (void)state;
+    // ---- Separator ----
+    {
+        sf::RectangleShape sep({panelW - pad * 2.f, 1.f});
+        sep.setPosition({px + pad, y});
+        sep.setFillColor(sf::Color(255, 255, 255, 25));
+        rw.draw(sep);
+        y += 18.f;
+    }
+
+    // ---- Dice Button ----
+    {
+        bool disabled = state.hasRolledDice;
+        float dbW = panelW - pad * 2.f;
+        float dbH = 56.f;
+        float dbX = px + pad;
+        float dbY = y;
+
+        sf::RectangleShape db({dbW, dbH});
+        db.setPosition({dbX, dbY});
+        db.setFillColor(disabled ? sf::Color(0x12, 0x1a, 0x2e) : sf::Color(0x1a, 0x28, 0x45));
+        db.setOutlineThickness(disabled ? 1.f : 2.f);
+        db.setOutlineColor(disabled ? BTN_BORDER : ACCENT_GOLD);
+        rw.draw(db);
+
+        sf::Text t(am.font("title"), "LEMPAR DADU", static_cast<unsigned>(dbH * 0.42f));
+        t.setFillColor(disabled ? TEXT_MUTED : TEXT_PRIMARY);
+        auto b = t.getLocalBounds();
+        t.setOrigin({b.position.x + b.size.x * 0.5f, b.position.y + b.size.y * 0.5f});
+        t.setPosition({dbX + dbW * 0.5f, dbY + dbH * 0.5f});
+        rw.draw(t);
+        y += dbH + 18.f;
+    }
+
+    // ---- Separator ----
+    {
+        sf::RectangleShape sep({panelW - pad * 2.f, 1.f});
+        sep.setPosition({px + pad, y});
+        sep.setFillColor(sf::Color(255, 255, 255, 25));
+        rw.draw(sep);
+        y += 18.f;
+    }
+
+    // ---- Property Mini-Cards ----
+    {
+        sf::Text hdr(am.font("bold"), "YOUR PROPERTIES", static_cast<unsigned>(panelW * 0.07f));
+        hdr.setFillColor(TEXT_PRIMARY);
+        auto hb = hdr.getLocalBounds();
+        hdr.setOrigin({hb.position.x + hb.size.x * 0.5f, hb.position.y});
+        hdr.setPosition({px + panelW * 0.5f, y});
+        rw.draw(hdr);
+        y += panelW * 0.07f + 12.f;
+
+        std::vector<const PropertyView*> myProps;
+        for (const auto& pv : state.properties) {
+            if (pv.ownerName == state.currentPlayerName)
+                myProps.push_back(&pv);
+        }
+
+        if (myProps.empty()) {
+            sf::Text empty(am.font("regular"), "No properties owned",
+                           static_cast<unsigned>(panelW * 0.06f));
+            empty.setFillColor(TEXT_MUTED);
+            empty.setPosition({px + pad, y});
+            rw.draw(empty);
+        } else {
+            float cardW = (panelW - pad * 2.f - 8.f) / 3.f;
+            float cardH = cardW * 1.35f;
+            float cardGap = 4.f;
+
+            for (size_t idx = 0; idx < myProps.size() && idx < 6; ++idx) {
+                const auto* pv = myProps[idx];
+                int col = static_cast<int>(idx % 3);
+                int row = static_cast<int>(idx / 3);
+                float cx = px + pad + col * (cardW + cardGap);
+                float cy = y + row * (cardH + cardGap);
+
+                sf::RectangleShape card({cardW, cardH});
+                card.setPosition({cx, cy});
+                card.setFillColor(sf::Color(0x0d, 0x14, 0x24));
+                card.setOutlineThickness(1.f);
+                card.setOutlineColor(BTN_BORDER);
+                rw.draw(card);
+
+                Color colGrp = Color::DEFAULT;
+                for (const auto& tv : state.tiles) {
+                    if (tv.code == pv->code) { colGrp = tv.color; break; }
+                }
+                sf::Color sc = gui::draw::tileColor(colGrp);
+                if (colGrp != Color::DEFAULT) {
+                    sf::RectangleShape strip({cardW, cardH * 0.22f});
+                    strip.setPosition({cx, cy});
+                    strip.setFillColor(sc);
+                    rw.draw(strip);
+                }
+
+                sf::Text ct(am.font("bold"), pv->code, static_cast<unsigned>(cardH * 0.22f));
+                ct.setFillColor(colGrp != Color::DEFAULT ? sc : TEXT_MUTED);
+                if (colGrp == Color::YELLOW) ct.setFillColor(sf::Color(0x90, 0x87, 0x00));
+                auto b = ct.getLocalBounds();
+                ct.setOrigin({b.position.x + b.size.x * 0.5f, b.position.y + b.size.y * 0.5f});
+                ct.setPosition({cx + cardW * 0.5f, cy + cardH * 0.58f});
+                rw.draw(ct);
+
+                if (pv->buildingLevel > 0) {
+                    float dotR = 3.5f;
+                    float dotY = cy + cardH * 0.82f;
+                    int lvl = std::min(pv->buildingLevel, 5);
+                    float startDX = cx + cardW * 0.5f - (lvl - 1) * dotR * 1.6f;
+                    for (int d = 0; d < lvl; ++d) {
+                        sf::CircleShape dot(dotR);
+                        dot.setFillColor(pv->status == PropertyStatus::MORTGAGED
+                                         ? sf::Color(150, 150, 150) : sf::Color(0x00, 0xd9, 0x8e));
+                        dot.setOrigin({dotR, dotR});
+                        dot.setPosition({startDX + d * dotR * 3.2f, dotY});
+                        rw.draw(dot);
+                    }
+                }
+
+                if (pv->status == PropertyStatus::MORTGAGED) {
+                    sf::RectangleShape ov({cardW, cardH});
+                    ov.setPosition({cx, cy});
+                    ov.setFillColor(sf::Color(0, 0, 0, 120));
+                    rw.draw(ov);
+                    sf::Text mt(am.font("bold"), "MRTG", static_cast<unsigned>(cardH * 0.16f));
+                    mt.setFillColor(sf::Color(0xff, 0x4d, 0x4d));
+                    auto mb = mt.getLocalBounds();
+                    mt.setOrigin({mb.position.x + mb.size.x * 0.5f, mb.position.y + mb.size.y * 0.5f});
+                    mt.setPosition({cx + cardW * 0.5f, cy + cardH * 0.5f});
+                    rw.draw(mt);
+                }
+            }
+        }
+    }
 #else
-    (void)rw; (void)state;
+    (void)rw; (void)state; (void)panelW; (void)H;
 #endif
 }
 
-void GUIView::drawBottomStrip(sf::RenderWindow& rw, const GameStateView& state) {
+void GUIView::drawDieFace(sf::RenderWindow& rw, float cx, float cy, float size, int face,
+                          unsigned fillRGB, unsigned dotRGB) {
 #if NIMONSPOLY_ENABLE_SFML
+    float half = size * 0.5f;
+    float radius = size * 0.08f;
+    float offset = size * 0.28f;
+
+    auto toColor = [](unsigned rgb) -> sf::Color {
+        return sf::Color(static_cast<uint8_t>((rgb >> 16) & 0xFF),
+                         static_cast<uint8_t>((rgb >> 8) & 0xFF),
+                         static_cast<uint8_t>(rgb & 0xFF));
+    };
+    sf::Color fill = toColor(fillRGB);
+    sf::Color dot = toColor(dotRGB);
+
+    sf::RectangleShape bg({size, size});
+    bg.setOrigin({half, half});
+    bg.setPosition({cx, cy});
+    bg.setFillColor(fill);
+    bg.setOutlineThickness(2.f);
+    bg.setOutlineColor(sf::Color(80, 90, 110));
+    rw.draw(bg);
+
+    auto drawDot = [&](float dx, float dy) {
+        sf::CircleShape d(radius);
+        d.setFillColor(dot);
+        d.setOrigin({radius, radius});
+        d.setPosition({cx + dx, cy + dy});
+        rw.draw(d);
+    };
+
+    if (face == 1) {
+        drawDot(0, 0);
+    } else if (face == 2) {
+        drawDot(-offset, -offset);
+        drawDot(offset, offset);
+    } else if (face == 3) {
+        drawDot(-offset, -offset);
+        drawDot(0, 0);
+        drawDot(offset, offset);
+    } else if (face == 4) {
+        drawDot(-offset, -offset);
+        drawDot(offset, -offset);
+        drawDot(-offset, offset);
+        drawDot(offset, offset);
+    } else if (face == 5) {
+        drawDot(-offset, -offset);
+        drawDot(offset, -offset);
+        drawDot(0, 0);
+        drawDot(-offset, offset);
+        drawDot(offset, offset);
+    } else if (face == 6) {
+        drawDot(-offset, -offset);
+        drawDot(offset, -offset);
+        drawDot(-offset, 0);
+        drawDot(offset, 0);
+        drawDot(-offset, offset);
+        drawDot(offset, offset);
+    }
+#endif
+}
+
+void GUIView::drawDiceAnimation(sf::RenderWindow& rw, float dt) {
+#if NIMONSPOLY_ENABLE_SFML
+    diceAnimElapsed_ += dt;
+
+    if (diceAnimElapsed_ >= DICE_ANIM_DURATION) {
+        diceAnimating_ = false;
+        diceAnimElapsed_ = 0.f;
+        return;
+    }
+
+    const float W = static_cast<float>(rw.getSize().x);
+    const float H = static_cast<float>(rw.getSize().y);
+    const float dieSz = 90.f;
+    const float gap = 30.f;
+    const float totalW = dieSz * 2.f + gap;
+    sf::Vector2f center{W * 0.5f, H * 0.5f};
+
+    // Semi-transparent backdrop
+    sf::RectangleShape dim({W, H});
+    dim.setFillColor(sf::Color(0, 0, 0, 80));
+    rw.draw(dim);
+
+    // Cycle random faces during animation
+    static std::mt19937 rng(static_cast<unsigned>(std::random_device{}()));
+    std::uniform_int_distribution<int> dist(1, 6);
+    if (static_cast<int>(diceAnimElapsed_ * 10) % 2 == 0) {
+        diceAnimFace1_ = dist(rng);
+        diceAnimFace2_ = dist(rng);
+    }
+
+    drawDieFace(rw, center.x - totalW * 0.5f + dieSz * 0.5f, center.y, dieSz, diceAnimFace1_,
+                0xFAFAF8, 0x282832);
+    drawDieFace(rw, center.x + totalW * 0.5f - dieSz * 0.5f, center.y, dieSz, diceAnimFace2_,
+                0xFAFAF8, 0x282832);
+#endif
+}
+
+void GUIView::renderPromptOverlay(const GUIPromptState& prompt) {
+#if NIMONSPOLY_ENABLE_SFML
+    if (!window) return;
+    sf::RenderWindow& rw = *window;
     AssetManager& am = AssetManager::get();
-    const float W    = static_cast<float>(rw.getSize().x);
-    const float H    = static_cast<float>(rw.getSize().y);
-    const float rpW  = W * RP_W_FRAC;
-    const float botH = H * BOT_H_FRAC;
-    const float stripRightPad = rpW * 0.08f;
-    const float stripX = W * LP_W_FRAC * 0.07f;
-    const float stripW = W - rpW - stripX - stripRightPad;
-    const float stripY = H - botH;
-    const float pad    = botH * 0.12f;
 
-    const sf::Texture* propCardTex = am.texture("assets/components/card/RectEmptyCard.png");
-    if (propCardTex) {
-        gui::draw::drawSprite(rw, propCardTex, {{stripX, stripY}, {stripW, botH}});
-    } else {
-        gui::draw::drawPanel(rw, {{stripX, stripY}, {stripW, botH}}, sf::Color(0x0f, 0x1a, 0x32, 220));
-    }
-    {
-        unsigned hSz2 = static_cast<unsigned>(botH * 0.18f);
-        gui::draw::drawLabel(rw, am, "title", "YOUR PROPERTY", hSz2,
-                             sf::Color(45, 65, 100), {stripX + pad, stripY + pad * 0.8f});
-    }
+    const float W = static_cast<float>(rw.getSize().x);
+    const float H = static_cast<float>(rw.getSize().y);
+    const float cx = W * 0.5f;
+    const float cy = H * 0.5f;
 
-    float cardY = stripY + botH * 0.28f;
-    const float cardH   = botH - (botH * 0.28f) - pad;
-    const float cardW   = cardH * 0.72f;
-    const float cardGap = cardW * 0.18f;
-    float cx   = stripX + pad;
-    float maxX = stripX + stripW - pad;
+    // Dim background
+    sf::RectangleShape dim({W, H});
+    dim.setFillColor(sf::Color(0, 0, 0, 160));
+    rw.draw(dim);
 
-    std::vector<const PropertyView*> myProps;
-    for (const auto& pv : state.properties) {
-        if (pv.ownerName == state.currentPlayerName)
-            myProps.push_back(&pv);
-    }
-
-    if (myProps.empty()) {
-        gui::draw::drawLabel(rw, am, "regular", "No properties owned",
-                             static_cast<unsigned>(botH * 0.15f),
-                             sf::Color(80, 100, 130), {cx, cardY + cardH * 0.3f});
-    }
-
-    for (const auto* pv : myProps) {
-        if (cx + cardW > maxX) break;
+    // Property card overlay (if buy prompt is active)
+    float panelYOffset = 0.f;
+    if (buyPromptActive_ && prompt.type == GUIPromptType::YES_NO) {
+        const float cardW = W * 0.30f;
+        const float cardH = H * 0.22f;
+        const float cardY = cy - H * 0.22f;
+        panelYOffset = cardH * 0.5f + 20.f;
 
         sf::RectangleShape card({cardW, cardH});
-        card.setPosition({cx, cardY});
+        card.setPosition({cx - cardW * 0.5f, cardY - cardH * 0.5f});
         card.setFillColor(sf::Color(250, 250, 248));
-        card.setOutlineThickness(1.f);
-        card.setOutlineColor(sf::Color(18, 20, 25));
+        card.setOutlineThickness(2.f);
+        card.setOutlineColor(sf::Color(60, 90, 140));
         rw.draw(card);
 
-        Color col = Color::DEFAULT;
-        for (const auto& tv : state.tiles) {
-            if (tv.code == pv->code) { col = tv.color; break; }
-        }
-        sf::Color sc = gui::draw::tileColor(col);
-        if (col != Color::DEFAULT) {
-            sf::RectangleShape strip({cardW, cardH * 0.18f});
-            strip.setPosition({cx, cardY});
-            strip.setFillColor(sc);
-            rw.draw(strip);
-        }
+        unsigned csz = static_cast<unsigned>(cardH * 0.13f);
+        sf::Text code(am.font("bold"), buyPromptInfo_.code, csz);
+        code.setFillColor(sf::Color(35, 55, 90));
+        auto cb = code.getLocalBounds();
+        code.setOrigin({cb.position.x + cb.size.x * 0.5f, cb.position.y});
+        code.setPosition({cx, cardY - cardH * 0.32f});
+        rw.draw(code);
 
-        unsigned csz = static_cast<unsigned>(cardH * 0.20f);
-        sf::Text ct(am.font("bold"), pv->code, csz);
-        ct.setFillColor(col != Color::DEFAULT ? sc : sf::Color(80, 90, 110));
-        if (col == Color::YELLOW) ct.setFillColor(sf::Color(0x90, 0x87, 0x00));
-        auto b = ct.getLocalBounds();
-        ct.setOrigin({b.position.x + b.size.x * 0.5f, b.position.y + b.size.y * 0.5f});
-        ct.setPosition({cx + cardW * 0.5f, cardY + cardH * 0.60f});
-        rw.draw(ct);
+        unsigned nsz = static_cast<unsigned>(cardH * 0.10f);
+        sf::Text name(am.font("regular"), buyPromptInfo_.name, nsz);
+        name.setFillColor(sf::Color(80, 100, 130));
+        auto nb = name.getLocalBounds();
+        name.setOrigin({nb.position.x + nb.size.x * 0.5f, nb.position.y});
+        name.setPosition({cx, cardY - cardH * 0.12f});
+        rw.draw(name);
 
-        if (pv->buildingLevel > 0) {
-            float dotR  = cardH * 0.055f;
-            float dotY  = cardY + cardH * 0.84f;
-            int   lvl   = std::min(pv->buildingLevel, 5);
-            float startDX = cx + cardW * 0.5f - (lvl - 1) * dotR * 1.4f;
-            for (int d = 0; d < lvl; ++d) {
-                sf::CircleShape dot(dotR);
-                dot.setFillColor(pv->status == PropertyStatus::MORTGAGED
-                                 ? sf::Color(150, 150, 150) : sf::Color(0x00, 0x93, 0x64));
-                dot.setOrigin({dotR, dotR});
-                dot.setPosition({startDX + d * dotR * 2.8f, dotY});
-                rw.draw(dot);
-            }
-        }
+        std::string priceStr = "Harga: " + buyPromptInfo_.purchasePrice.toString();
+        sf::Text price(am.font("regular"), priceStr, nsz);
+        price.setFillColor(sf::Color(20, 110, 70));
+        auto pb = price.getLocalBounds();
+        price.setOrigin({pb.position.x + pb.size.x * 0.5f, pb.position.y});
+        price.setPosition({cx, cardY + cardH * 0.08f});
+        rw.draw(price);
 
-        if (pv->status == PropertyStatus::MORTGAGED) {
-            sf::RectangleShape ov({cardW, cardH});
-            ov.setPosition({cx, cardY});
-            ov.setFillColor(sf::Color(0, 0, 0, 100));
-            rw.draw(ov);
-            unsigned msz = static_cast<unsigned>(cardH * 0.14f);
-            sf::Text mt(am.font("bold"), "MRTG", msz);
-            mt.setFillColor(sf::Color(220, 80, 80));
-            auto mb2 = mt.getLocalBounds();
-            mt.setOrigin({mb2.position.x + mb2.size.x * 0.5f,
-                          mb2.position.y + mb2.size.y * 0.5f});
-            mt.setPosition({cx + cardW * 0.5f, cardY + cardH * 0.5f});
-            rw.draw(mt);
-        }
-
-        cx += cardW + cardGap;
+        std::string moneyStr = "Uangmu: " + buyPromptMoney_.toString();
+        sf::Text money(am.font("regular"), moneyStr, nsz);
+        money.setFillColor(sf::Color(100, 100, 120));
+        auto mb = money.getLocalBounds();
+        money.setOrigin({mb.position.x + mb.size.x * 0.5f, mb.position.y});
+        money.setPosition({cx, cardY + cardH * 0.24f});
+        rw.draw(money);
     }
-#else
-    (void)rw; (void)state;
+
+    // Panel
+    const float panelW = W * 0.42f;
+    const float panelH = H * 0.28f;
+    sf::RectangleShape panel({panelW, panelH});
+    panel.setPosition({cx - panelW * 0.5f, cy - panelH * 0.5f + panelYOffset});
+    panel.setFillColor(sf::Color(250, 250, 252));
+    panel.setOutlineThickness(2.f);
+    panel.setOutlineColor(sf::Color(80, 130, 200));
+    rw.draw(panel);
+
+    unsigned titleSz = static_cast<unsigned>(panelH * 0.13f);
+    unsigned bodySz  = static_cast<unsigned>(panelH * 0.10f);
+    unsigned hintSz  = static_cast<unsigned>(panelH * 0.07f);
+
+    // Title / label
+    sf::Text title(am.font("bold"), prompt.label, titleSz);
+    title.setFillColor(sf::Color(35, 55, 90));
+    auto tb = title.getLocalBounds();
+    title.setOrigin({tb.position.x + tb.size.x * 0.5f, tb.position.y});
+    title.setPosition({cx, cy - panelH * 0.30f + panelYOffset});
+    rw.draw(title);
+
+    // Type-specific content
+    float contentY = cy - panelH * 0.08f + panelYOffset;
+
+    if (prompt.type == GUIPromptType::MENU_CHOICE) {
+        float optY = contentY;
+        for (int i = 0; i < static_cast<int>(prompt.options.size()); ++i) {
+            std::string line = std::to_string(i) + ". " + prompt.options[static_cast<size_t>(i)];
+            sf::Text opt(am.font("regular"), line, bodySz);
+            opt.setFillColor(sf::Color(60, 80, 120));
+            auto ob = opt.getLocalBounds();
+            opt.setOrigin({ob.position.x + ob.size.x * 0.5f, ob.position.y});
+            opt.setPosition({cx, optY});
+            rw.draw(opt);
+            optY += bodySz * 1.4f;
+        }
+    } else if (prompt.type == GUIPromptType::YES_NO) {
+        sf::Text hint(am.font("regular"), "Ketik Y / N lalu Enter", hintSz);
+        hint.setFillColor(sf::Color(120, 140, 170));
+        auto hb = hint.getLocalBounds();
+        hint.setOrigin({hb.position.x + hb.size.x * 0.5f, hb.position.y});
+        hint.setPosition({cx, contentY});
+        rw.draw(hint);
+    } else if (prompt.type == GUIPromptType::AUCTION) {
+        sf::Text hint(am.font("regular"), "Ketik PASS atau BID <jumlah>", hintSz);
+        hint.setFillColor(sf::Color(120, 140, 170));
+        auto hb = hint.getLocalBounds();
+        hint.setOrigin({hb.position.x + hb.size.x * 0.5f, hb.position.y});
+        hint.setPosition({cx, contentY});
+        rw.draw(hint);
+    } else {
+        sf::Text hint(am.font("regular"), "Ketik jawaban lalu Enter", hintSz);
+        hint.setFillColor(sf::Color(120, 140, 170));
+        auto hb = hint.getLocalBounds();
+        hint.setOrigin({hb.position.x + hb.size.x * 0.5f, hb.position.y});
+        hint.setPosition({cx, contentY});
+        rw.draw(hint);
+    }
+
+    // Text input buffer
+    sf::Text buffer(am.font("regular"), "> " + prompt.textBuffer + "_", bodySz);
+    buffer.setFillColor(sf::Color(40, 60, 100));
+    auto bb = buffer.getLocalBounds();
+    buffer.setOrigin({bb.position.x + bb.size.x * 0.5f, bb.position.y});
+    buffer.setPosition({cx, cy + panelH * 0.22f + panelYOffset});
+    rw.draw(buffer);
+
+    if (prompt.resolved) {
+        buyPromptActive_ = false;
+    }
+#endif
+}
+
+void GUIView::handleInGameClick(float mx, float my, std::string& outCommand, const GameStateView& state) {
+#if NIMONSPOLY_ENABLE_SFML
+    if (!window) return;
+    const float W = static_cast<float>(window->getSize().x);
+    const float H = static_cast<float>(window->getSize().y);
+
+    const float globeSize = H;
+    const float panelW = (W - globeSize) * 0.5f;
+    const float px = W - panelW;
+    const float pad = 14.f;
+
+    float y = pad;
+
+    // Action Buttons Grid 2x3
+    float btnW = (panelW - pad * 2.f - 8.f) * 0.5f;
+    float btnH = 40.f;
+    float gapX = 8.f;
+    float gapY = 8.f;
+
+    const char* actions[] = {"TEBUS", "BANGUN", "GADAI", "KARTU", "SIMPAN", "SELESAI"};
+    for (int i = 0; i < 6; ++i) {
+        int col = i % 2;
+        int row = i / 2;
+        float bx = px + pad + col * (btnW + gapX);
+        float by = y + row * (btnH + gapY);
+        if (mx >= bx && mx <= bx + btnW &&
+            my >= by && my <= by + btnH) {
+            outCommand = actions[i];
+            return;
+        }
+    }
+    y += 3.f * (btnH + gapY) + 18.f + 18.f; // after buttons + separator
+
+    // Dice Button
+    {
+        float dbW = panelW - pad * 2.f;
+        float dbH = 56.f;
+        float dbX = px + pad;
+        float dbY = y;
+        if (mx >= dbX && mx <= dbX + dbW &&
+            my >= dbY && my <= dbY + dbH) {
+            if (!state.hasRolledDice && !diceAnimating_) {
+                diceAnimating_ = true;
+                diceAnimElapsed_ = 0.f;
+                outCommand = "DADU";
+            }
+            return;
+        }
+    }
 #endif
 }

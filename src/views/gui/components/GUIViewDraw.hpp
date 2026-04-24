@@ -38,6 +38,12 @@ namespace gui::draw {
                    const std::string& fontKey, const std::string& str,
                    unsigned sz, sf::Color col, sf::Vector2f pos);
 
+    std::vector<std::string> wrapText(AssetManager& am,
+                                      const std::string& fontKey,
+                                      const std::string& text,
+                                      unsigned charSize,
+                                      float maxWidth);
+
     void drawPanel(sf::RenderWindow& rw, sf::FloatRect rect, sf::Color fill);
 }
 #endif
