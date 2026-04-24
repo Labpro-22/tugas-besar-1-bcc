@@ -36,62 +36,50 @@ void drawTileCard(sf::RenderWindow& rw,
                   sf::Vector2f pos, float tileSz,
                   const TileView& tv,
                   AssetManager& am) {
-    const int side = tv.index / 10;
-    float rotDeg = 0.f;
-    if      (side == 0) rotDeg = 180.f;
-    else if (side == 1) rotDeg =  90.f;
-    else if (side == 3) rotDeg = 270.f;
-
-    sf::Vector2f center{pos.x + tileSz * 0.5f, pos.y + tileSz * 0.5f};
-    sf::Transform tfm;
-    tfm.rotate(sf::degrees(rotDeg), center);
-    sf::RenderStates rs(tfm);
-
-    const sf::Texture* tex = am.tileTexture(tv.code);
-    if (tex) {
-        const float pad = tileSz * 0.02f;
-        const float drawSz = tileSz - pad * 2.0f;
-        auto texSz = tex->getSize();
-        float scale = std::min(drawSz / static_cast<float>(texSz.x),
-                               drawSz / static_cast<float>(texSz.y));
-        sf::Sprite sprite(*tex);
-        sprite.setScale({scale, scale});
-        sprite.setPosition({center.x - texSz.x * scale * 0.5f,
-                            center.y - texSz.y * scale * 0.5f});
-        rw.draw(sprite, rs);
-        return;
-    }
-
+    // NO ROTATION — draw flat to prevent sub-pixel gaps between tiles.
     const sf::Color grpColor = tileColor(tv.color);
     const bool hasGroup = (tv.color != Color::DEFAULT);
 
-    sf::RectangleShape bg({tileSz, tileSz});
+    // Fill the full tile area (slight overdraw to guarantee no seams).
+    sf::RectangleShape bg({tileSz + 0.5f, tileSz + 0.5f});
     bg.setPosition(pos);
     bg.setFillColor(hasGroup ? sf::Color(250, 250, 248) : sf::Color(50, 54, 66));
-    rw.draw(bg, rs);
+    rw.draw(bg);
+
+    const sf::Texture* tex = am.tileTexture(tv.code);
+    if (tex) {
+        auto texSz = tex->getSize();
+        float scale = std::min(tileSz / static_cast<float>(texSz.x),
+                               tileSz / static_cast<float>(texSz.y));
+        sf::Sprite sprite(*tex);
+        sprite.setScale({scale, scale});
+        sprite.setPosition({pos.x + (tileSz - texSz.x * scale) * 0.5f,
+                            pos.y + (tileSz - texSz.y * scale) * 0.5f});
+        rw.draw(sprite);
+    }
 
     const float photoFrac = 0.62f;
     const float photoH    = tileSz * photoFrac;
     if (hasGroup) {
-        sf::RectangleShape fill({tileSz, photoH});
+        sf::RectangleShape fill({tileSz + 0.5f, photoH});
         fill.setPosition(pos);
         fill.setFillColor(sf::Color(grpColor.r, grpColor.g, grpColor.b, 100));
-        rw.draw(fill, rs);
+        rw.draw(fill);
     }
 
     if (hasGroup) {
-        sf::RectangleShape strip({tileSz, tileSz * 0.08f});
+        sf::RectangleShape strip({tileSz + 0.5f, tileSz * 0.08f});
         strip.setPosition({pos.x, pos.y + photoH});
         strip.setFillColor(grpColor);
-        rw.draw(strip, rs);
+        rw.draw(strip);
     }
 
     const float badgeFrac = 0.22f;
     const float badgeY    = pos.y + tileSz * (1.f - badgeFrac);
-    sf::RectangleShape badge({tileSz, tileSz * badgeFrac});
+    sf::RectangleShape badge({tileSz + 0.5f, tileSz * badgeFrac});
     badge.setPosition({pos.x, badgeY});
     badge.setFillColor(sf::Color(255, 255, 255, 210));
-    rw.draw(badge, rs);
+    rw.draw(badge);
 
     const sf::Font& font = am.font("bold");
     unsigned charSz = static_cast<unsigned>(tileSz * 0.22f);
@@ -106,7 +94,7 @@ void drawTileCard(sf::RenderWindow& rw,
                      lb.position.y + lb.size.y * 0.5f});
     label.setPosition({pos.x + tileSz * 0.5f,
                        badgeY + tileSz * badgeFrac * 0.5f});
-    rw.draw(label, rs);
+    rw.draw(label);
 }
 
 void drawGlobeBackground(sf::RenderWindow& rw) {

@@ -107,9 +107,8 @@ private:
     std::string saveLoadStatus_;
     int saveLoadStatusFrames_{0};
 
-    void drawLeftPanel (sf::RenderWindow& rw, const GameStateView& state);
-    void drawRightPanel(sf::RenderWindow& rw, const GameStateView& state);
-    void drawBottomStrip(sf::RenderWindow& rw, const GameStateView& state);
+    void drawLeftPanel (sf::RenderWindow& rw, const GameStateView& state, float panelW, float H);
+    void drawRightPanel(sf::RenderWindow& rw, const GameStateView& state, float panelW, float H);
     void drawGameOver();
     void drawDiceAnimation(sf::RenderWindow& rw, float dt);
     void drawDieFace(sf::RenderWindow& rw, float cx, float cy, float size, int face,

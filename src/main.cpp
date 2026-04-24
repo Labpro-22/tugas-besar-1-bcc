@@ -206,6 +206,38 @@ int main() {
                         view.showSaveLoadStatus("Gagal menyimpan.");
                     }
                     pendingCommand.clear();
+                } else if (pendingCommand == "DADU") {
+                    engine.processCommand("lempar", *active);
+                    pendingCommand.clear();
+                } else if (pendingCommand == "TEBUS") {
+                    std::string code = input.getPropertyCodeInput("Kode properti untuk tebus");
+                    if (!code.empty()) {
+                        engine.processCommand("tebus " + code, *active);
+                    }
+                    pendingCommand.clear();
+                } else if (pendingCommand == "BANGUN") {
+                    std::string code = input.getPropertyCodeInput("Kode properti untuk bangun");
+                    if (!code.empty()) {
+                        engine.processCommand("bangun " + code, *active);
+                    }
+                    pendingCommand.clear();
+                } else if (pendingCommand == "GADAI") {
+                    std::string code = input.getPropertyCodeInput("Kode properti untuk gadai");
+                    if (!code.empty()) {
+                        engine.processCommand("gadai " + code, *active);
+                    }
+                    pendingCommand.clear();
+                } else if (pendingCommand == "KARTU") {
+                    int numCards = static_cast<int>(active->getSkillCards().size());
+                    if (numCards > 0) {
+                        int choice = input.getSkillCardChoice(numCards);
+                        if (choice > 0) {
+                            engine.processCommand("gunakan kemampuan " + std::to_string(choice), *active);
+                        }
+                    } else {
+                        view.showSaveLoadStatus("Tidak ada kartu kemampuan.");
+                    }
+                    pendingCommand.clear();
                 } else {
                     engine.processCommand(pendingCommand, *active);
                     pendingCommand.clear();
