@@ -869,20 +869,6 @@ void GameEngine::resolveCardLanding(Player& player, bool chance) {
 
 void GameEngine::resolvePropertyLanding(Player& player, PropertyTile& property, int diceTotal) {
 	if (!property.getOwner()) {
-		if (property.getType() == TileType::RAILROAD || property.getType() == TileType::UTILITY) {
-			if (player.canAfford(property.getPrice())) {
-				bank.collectFromPlayer(player, property.getPrice(), "Akuisisi otomatis");
-				property.setOwner(&player);
-				property.setStatus(PropertyStatus::OWNED);
-				player.addProperty(&property);
-				board.updateMonopolies();
-				std::cout << property.getName() << " kini milik " << player.getUsername() << ".\n";
-				transactionLogger.log(gameState.getCurrentTurn(), player.getUsername(), "BELI",
-					"Beli " + propertyLabel(property) + " " + property.getPrice().toString());
-			}
-			return;
-		}
-
 		bool wantsBuy = false;
 		if (PlayerController* controller = player.getController()) {
 			wantsBuy = controller->decideBuyProperty(makePropertyInfo(property), player.getMoney());
