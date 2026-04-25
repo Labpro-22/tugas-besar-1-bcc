@@ -75,12 +75,14 @@ public:
     int getJailTurnsRemaining() const;
     void incrementJailTurn();
     void resetJailTurns();
+    void setJailTurnsRemaining(int turns);
 
     int getConsecutiveDoubles() const;
     void setConsecutiveDoubles(int n);
 
     int getTurnCount() const;
     void incrementTurnCount();
+    void setTurnCount(int count);
 
     bool operator<(const Player& other) const;
     bool operator>(const Player& other) const;

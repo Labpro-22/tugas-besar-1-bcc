@@ -8,6 +8,7 @@ public:
     Money modifyOutgoingPayment(const Money& amount) const override;
     std::string getDescription() const override;
     std::string getEffectType() const override;
+    int getPercentage() const;
 
 private:
     int percent;

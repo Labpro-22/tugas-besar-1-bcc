@@ -275,6 +275,10 @@ void Player::resetJailTurns() {
     jailTurnsRemaining = 0;
 }
 
+void Player::setJailTurnsRemaining(int turns) {
+    jailTurnsRemaining = turns < 0 ? 0 : turns;
+}
+
 int Player::getConsecutiveDoubles() const {
     return consecutiveDoubles;
 }
@@ -289,6 +293,10 @@ int Player::getTurnCount() const {
 
 void Player::incrementTurnCount() {
     ++turnCount;
+}
+
+void Player::setTurnCount(int count) {
+    turnCount = count < 0 ? 0 : count;
 }
 
 bool Player::operator<(const Player& other) const {

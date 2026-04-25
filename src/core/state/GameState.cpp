@@ -128,7 +128,11 @@ void GameState::resetTurnFlags() {
 }
 
 bool GameState::canSave() const {
-	return phase == GamePhase::RUNNING && !players.empty();
+	return phase == GamePhase::RUNNING &&
+		!players.empty() &&
+		!hasRolledDice &&
+		!hasUsedSkillCard &&
+		!extraRollAvailable;
 }
 
 GameStateView GameState::toView() const {

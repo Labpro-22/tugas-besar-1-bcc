@@ -11,3 +11,7 @@ std::string DiscountEffect::getDescription() const {
 }
 
 std::string DiscountEffect::getEffectType() const { return "Discount"; }
+
+int DiscountEffect::getPercentage() const {
+    return percent;
+}

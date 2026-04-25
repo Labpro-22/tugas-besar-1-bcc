@@ -244,6 +244,159 @@ namespace {
 		return info;
 	}
 
+	bool fileExists(const std::string& path) {
+		std::ifstream file(path);
+		return static_cast<bool>(file);
+	}
+
+	int buildingSaleRefund(const StreetTile& street) {
+		const int houses = std::min(street.getBuildingLevel(), 4);
+		int refund = houses * street.getHouseCost().getAmount() / 2;
+		if (street.hasHotel()) {
+			refund += street.getHotelCost().getAmount() / 2;
+		}
+		return refund;
+	}
+
+	Money propertySaleValue(const PropertyTile& property) {
+		if (property.isMortgaged()) {
+			return Money::zero();
+		}
+
+		int total = property.getPrice().getAmount();
+		if (const auto* street = dynamic_cast<const StreetTile*>(&property)) {
+			total += buildingSaleRefund(*street);
+		}
+		return Money(total);
+	}
+
+	bool canMortgagePropertyNow(const PropertyTile& property, const Board& board) {
+		if (property.isMortgaged()) {
+			return false;
+		}
+
+		const auto* street = dynamic_cast<const StreetTile*>(&property);
+		if (!street) {
+			return true;
+		}
+
+		const ColorGroup* group = board.getColorGroup(street->getColor());
+		if (!group) {
+			return street->getBuildingLevel() == 0;
+		}
+		for (const StreetTile* member : group->getStreets()) {
+			if (member && member->getBuildingLevel() > 0) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	bool satisfiesEvenBuildRule(const StreetTile& street, const Board& board) {
+		const ColorGroup* group = board.getColorGroup(street.getColor());
+		if (!group) {
+			return true;
+		}
+
+		const int level = street.getBuildingLevel();
+		if (level < 4) {
+			return level == group->getMinBuildLevel();
+		}
+		if (level == 4) {
+			return group->hasUniformBuildLevel();
+		}
+		return false;
+	}
+
+	void demolishAllBuildings(StreetTile& street) {
+		while (street.getBuildingLevel() > 0) {
+			street.demolish();
+		}
+	}
+
+	int activeOtherPlayersCount(const std::vector<Player*>& players, const Player& current) {
+		int count = 0;
+		for (const Player* player : players) {
+			if (player && player != &current && !player->isBankrupt()) {
+				++count;
+			}
+		}
+		return count;
+	}
+
+	std::vector<PlayerSummary> buildPlayerSummaries(const std::vector<Player*>& players) {
+		std::vector<PlayerSummary> summaries;
+		for (const Player* player : players) {
+			if (!player || player->isBankrupt()) {
+				continue;
+			}
+
+			PlayerSummary summary;
+			summary.username = player->getUsername();
+			summary.money = player->getMoney();
+			summary.propertyCount = static_cast<int>(player->getProperties().size());
+			summary.cardCount = static_cast<int>(player->getSkillCards().size());
+			summary.isBankrupt = false;
+			summaries.push_back(summary);
+		}
+
+		std::sort(summaries.begin(), summaries.end(), [](const PlayerSummary& a, const PlayerSummary& b) {
+			if (a.money != b.money) {
+				return a.money > b.money;
+			}
+			if (a.propertyCount != b.propertyCount) {
+				return a.propertyCount > b.propertyCount;
+			}
+			if (a.cardCount != b.cardCount) {
+				return a.cardCount > b.cardCount;
+			}
+			return a.username < b.username;
+		});
+		return summaries;
+	}
+
+	LiquidationState buildLiquidationStateSnapshot(const Player& debtor, const Board& board, Money obligation) {
+		LiquidationState state;
+		state.obligation = obligation;
+		state.currentBalance = debtor.getMoney();
+		state.maxLiquidation = debtor.getMoney();
+
+		int optionIndex = 1;
+		for (PropertyTile* property : debtor.getProperties()) {
+			if (!property) {
+				continue;
+			}
+
+			if (!property->isMortgaged()) {
+				const Money sellValue = propertySaleValue(*property);
+				if (sellValue.isPositive()) {
+					LiquidationOption option;
+					option.index = optionIndex++;
+					option.type = LiquidationType::SELL;
+					option.code = property->getCode();
+					option.name = property->getName();
+					option.value = sellValue;
+					option.description = "Jual ke Bank";
+					state.options.push_back(option);
+					state.maxLiquidation += sellValue;
+				}
+			}
+
+			if (canMortgagePropertyNow(*property, board)) {
+				LiquidationOption option;
+				option.index = optionIndex++;
+				option.type = LiquidationType::MORTGAGE;
+				option.code = property->getCode();
+				option.name = property->getName();
+				option.value = property->getMortgageValue();
+				option.description = "Gadai";
+				state.options.push_back(option);
+			}
+		}
+
+		return state;
+	}
+
 }
 
 GameEngine::GameEngine(GameState initialState)
@@ -271,7 +424,14 @@ void GameEngine::initialize(const std::vector<Player*>& players, int maxTurn) {
 bool GameEngine::loadConfiguration(const std::string& directory, int targetNumTiles) {
 	configDirectory = directory.empty() ? "config" : directory;
 	numTiles = targetNumTiles > 0 ? targetNumTiles : 40;
-	const bool loaded = gameConfig.loadFromDirectory(configDirectory.c_str());
+	const std::string sizeDir = configDirectory + "/" + std::to_string(numTiles);
+
+	bool loaded = gameConfig.loadFromDirectory(configDirectory.c_str());
+	if (fileExists(sizeDir + "/misc.txt") ||
+		fileExists(sizeDir + "/tax.txt") ||
+		fileExists(sizeDir + "/special.txt")) {
+		loaded = gameConfig.loadFromDirectory(sizeDir.c_str()) || loaded;
+	}
 	buildDefaultBoard(configDirectory, numTiles);
 	return loaded;
 }
@@ -349,15 +509,17 @@ void GameEngine::buildDefaultBoard(const std::string& directory, int targetNumTi
 				ColorGroup* group = board.ensureColorGroup(street->getColor());
 				group->addStreet(street.get());
 				board.addTile(std::move(street));
-			} else if (normalizedKind == "railroad") {
-				board.addTile(std::make_unique<RailroadTile>(
-					index, code, displayName(row.name), Money(row.price), Money(row.mortgage)
-				));
-			} else if (normalizedKind == "utility") {
-				board.addTile(std::make_unique<UtilityTile>(
-					index, code, displayName(row.name), Money(row.price), Money(row.mortgage)
-				));
-			}
+				} else if (normalizedKind == "railroad") {
+					board.addTile(std::make_unique<RailroadTile>(
+						index, code, displayName(row.name), Money(row.price), Money(row.mortgage),
+						gameConfig.getRailroadRentTable()
+					));
+				} else if (normalizedKind == "utility") {
+					board.addTile(std::make_unique<UtilityTile>(
+						index, code, displayName(row.name), Money(row.price), Money(row.mortgage),
+						gameConfig.getUtilityMultiplierTable()
+					));
+				}
 			++index;
 			continue;
 		}
@@ -515,10 +677,14 @@ void GameEngine::setRepository(IGameRepository* r) {
 }
 
 bool GameEngine::saveGame(const std::string& id) {
-	if (!repository) {
+	if (!repository || !gameState.canSave() || dice.hasManualSet()) {
 		return false;
 	}
-	return repository->save(gameState, board, transactionLogger, festivalManager, id);
+	const bool saved = repository->save(gameState, board, transactionLogger, festivalManager, cardSystem, id);
+	if (saved) {
+		transactionLogger.log(gameState.getCurrentTurn(), "SYSTEM", "SAVE", "Simpan permainan ke " + id);
+	}
+	return saved;
 }
 
 bool GameEngine::loadGame(const std::string& id) {
@@ -540,10 +706,11 @@ bool GameEngine::loadGame(const std::string& id) {
 		}
 	}
 
-	if (!repository->loadInto(gameState, board, transactionLogger, festivalManager, id)) {
+	if (!repository->loadInto(gameState, board, transactionLogger, festivalManager, cardSystem, id)) {
 		return false;
 	}
 	syncTurnManagerAfterLoad();
+	transactionLogger.log(gameState.getCurrentTurn(), "SYSTEM", "LOAD", "Muat permainan dari " + id);
 	return true;
 }
 
@@ -555,26 +722,14 @@ void GameEngine::syncTurnManagerAfterLoad() {
 }
 
 void GameEngine::printWinners() const {
-	std::vector<const Player*> standing;
-	for (Player* p : gameState.getPlayers()) {
-		if (p && !p->isBankrupt()) {
-			standing.push_back(p);
-		}
-	}
-	std::sort(standing.begin(), standing.end(), [](const Player* a, const Player* b) {
-		if (!a || !b) return a != nullptr;
-		const Money wa = a->getTotalWealth();
-		const Money wb = b->getTotalWealth();
-		if (wa.getAmount() != wb.getAmount()) {
-			return wa.getAmount() > wb.getAmount();
-		}
-		return a->getUsername() < b->getUsername();
-	});
+	const std::vector<PlayerSummary> standing = buildPlayerSummaries(gameState.getPlayers());
 	std::cout << "=== Peringkat kekayaan ===\n";
 	int rank = 1;
-	for (const Player* p : standing) {
-		if (!p) continue;
-		std::cout << rank++ << ". " << p->getUsername() << " — " << p->getTotalWealth().toString() << "\n";
+	for (const PlayerSummary& summary : standing) {
+		std::cout << rank++ << ". " << summary.username
+			<< " — uang " << summary.money.toString()
+			<< ", properti " << summary.propertyCount
+			<< ", kartu " << summary.cardCount << "\n";
 	}
 }
 
@@ -601,7 +756,7 @@ bool GameEngine::processCommand(const std::string& input, Player& player) {
 			if (path.empty()) {
 				path = "nimonspoli_save.txt";
 			}
-			if (!gameState.canSave()) {
+			if (!gameState.canSave() || dice.hasManualSet()) {
 				std::cout << "Permainan belum bisa disimpan.\n";
 				return false;
 			}
@@ -941,12 +1096,69 @@ void GameEngine::resolveLanding(Player& player, int diceTotal) {
 
 void GameEngine::resolveCardLanding(Player& player, bool chance) {
 	GameContext context{bank, festivalManager, transactionLogger, gameConfig, dice, const_cast<std::vector<Player*>&>(gameState.getPlayers()), board, gameState.getCurrentTurn()};
+	const auto resolvePeerPaymentCard = [&](const CardResult& rawResult) -> bool {
+		if (rawResult.action != CardResultAction::RECEIVE_FROM_EACH_PLAYER &&
+			rawResult.action != CardResultAction::PAY_EACH_PLAYER) {
+			return false;
+		}
+
+		for (Player* other : gameState.getPlayers()) {
+			if (!other || other == &player || other->isBankrupt()) {
+				continue;
+			}
+
+			if (rawResult.action == CardResultAction::RECEIVE_FROM_EACH_PLAYER) {
+				if (!other->canAfford(other->applyOutgoingModifiers(rawResult.amount))) {
+					executeBankruptcy(*other, &player, rawResult.amount);
+				} else {
+					bank.transferBetweenPlayers(*other, player, rawResult.amount, rawResult.message);
+				}
+				continue;
+			}
+
+			if (player.isBankrupt()) {
+				break;
+			}
+			if (!player.canAfford(player.applyOutgoingModifiers(rawResult.amount))) {
+				executeBankruptcy(player, other, rawResult.amount);
+			} else if (!player.isBankrupt()) {
+				bank.transferBetweenPlayers(player, *other, rawResult.amount, rawResult.message);
+			}
+		}
+
+		if (!rawResult.message.empty()) {
+			transactionLogger.log(gameState.getCurrentTurn(), player.getUsername(), "KARTU", rawResult.message);
+		}
+		return true;
+	};
+
 	if (chance) {
 		auto card = cardSystem.drawChance();
 		if (!card) return;
 		std::cout << "Kartu Kesempatan: " << card->getDescription() << "\n";
-		CardResult result = CardSystem::applyImmediateResult(player, context, card->execute(player, context));
+		CardResult rawResult = card->execute(player, context);
+		transactionLogger.log(gameState.getCurrentTurn(), player.getUsername(), "KARTU",
+			"Kesempatan: " + card->getDescription());
+		if (resolvePeerPaymentCard(rawResult)) {
+			cardSystem.discardChance(std::move(card));
+			return;
+		}
+		CardResult result = CardSystem::applyImmediateResult(player, context, rawResult);
 		cardSystem.discardChance(std::move(card));
+		if (!result.success) {
+			std::cout << result.message << "\n";
+			transactionLogger.log(gameState.getCurrentTurn(), player.getUsername(), "KARTU", result.message);
+			if (rawResult.action == CardResultAction::PAY_BANK) {
+				executeBankruptcy(player, nullptr, rawResult.amount);
+			} else if (rawResult.action == CardResultAction::PAY_EACH_PLAYER) {
+				executeBankruptcy(player, nullptr,
+					Money(rawResult.amount.getAmount() * activeOtherPlayersCount(gameState.getPlayers(), player)));
+			}
+			return;
+		}
+		if (!result.message.empty()) {
+			transactionLogger.log(gameState.getCurrentTurn(), player.getUsername(), "KARTU", result.message);
+		}
 		if (result.success && result.resolveLanding) {
 			resolveLanding(player, lastDiceTotal);
 		}
@@ -954,8 +1166,29 @@ void GameEngine::resolveCardLanding(Player& player, bool chance) {
 		auto card = cardSystem.drawCommunityChest();
 		if (!card) return;
 		std::cout << "Kartu Dana Umum: " << card->getDescription() << "\n";
-		CardResult result = CardSystem::applyImmediateResult(player, context, card->execute(player, context));
+		CardResult rawResult = card->execute(player, context);
+		transactionLogger.log(gameState.getCurrentTurn(), player.getUsername(), "KARTU",
+			"Dana Umum: " + card->getDescription());
+		if (resolvePeerPaymentCard(rawResult)) {
+			cardSystem.discardCommunityChest(std::move(card));
+			return;
+		}
+		CardResult result = CardSystem::applyImmediateResult(player, context, rawResult);
 		cardSystem.discardCommunityChest(std::move(card));
+		if (!result.success) {
+			std::cout << result.message << "\n";
+			transactionLogger.log(gameState.getCurrentTurn(), player.getUsername(), "KARTU", result.message);
+			if (rawResult.action == CardResultAction::PAY_BANK) {
+				executeBankruptcy(player, nullptr, rawResult.amount);
+			} else if (rawResult.action == CardResultAction::PAY_EACH_PLAYER) {
+				executeBankruptcy(player, nullptr,
+					Money(rawResult.amount.getAmount() * activeOtherPlayersCount(gameState.getPlayers(), player)));
+			}
+			return;
+		}
+		if (!result.message.empty()) {
+			transactionLogger.log(gameState.getCurrentTurn(), player.getUsername(), "KARTU", result.message);
+		}
 		if (result.success && result.resolveLanding) {
 			resolveLanding(player, lastDiceTotal);
 		}
@@ -964,6 +1197,17 @@ void GameEngine::resolveCardLanding(Player& player, bool chance) {
 
 void GameEngine::resolvePropertyLanding(Player& player, PropertyTile& property, int diceTotal) {
 	if (!property.getOwner()) {
+		if (property.getType() == TileType::RAILROAD || property.getType() == TileType::UTILITY) {
+			property.setOwner(&player);
+			property.setStatus(PropertyStatus::OWNED);
+			player.addProperty(&property);
+			board.updateMonopolies();
+			transactionLogger.log(gameState.getCurrentTurn(), player.getUsername(),
+				property.getType() == TileType::RAILROAD ? "RAILROAD" : "UTILITY",
+				propertyLabel(property) + " kini dimiliki otomatis");
+			return;
+		}
+
 		bool wantsBuy = false;
 		if (PlayerController* controller = player.getController()) {
 			wantsBuy = controller->decideBuyProperty(makePropertyInfo(property), player.getMoney());
@@ -1122,11 +1366,19 @@ void GameEngine::mortgageProperty(Player& player, const std::string& code) {
 	if (auto* street = dynamic_cast<StreetTile*>(property)) {
 		ColorGroup* group = board.getColorGroup(street->getColor());
 		if (group) {
+			bool soldBuildings = false;
 			for (StreetTile* member : group->getStreets()) {
-				if (member->getBuildingLevel() > 0) {
-					std::cout << "Jual bangunan color group dulu sebelum gadai.\n";
-					return;
+				while (member && member->getBuildingLevel() > 0) {
+					const Money refund(buildingSaleRefund(*member));
+					member->demolish();
+					bank.payPlayer(player, refund, "Jual bangunan sebelum gadai");
+					transactionLogger.log(gameState.getCurrentTurn(), player.getUsername(), "LIKUIDASI",
+						"Jual bangunan " + propertyLabel(*member) + " " + refund.toString());
+					soldBuildings = true;
 				}
+			}
+			if (soldBuildings) {
+				board.updateMonopolies();
 			}
 		}
 	}
@@ -1164,7 +1416,7 @@ void GameEngine::buildOnProperty(Player& player, const std::string& code) {
 	}
 	board.updateMonopolies();
 	ColorGroup* group = board.getColorGroup(street->getColor());
-	if (!group || !street->canBuild()) {
+	if (!group || !street->canBuild() || !satisfiesEvenBuildRule(*street, board)) {
 		std::cout << "Syarat monopoli/pembangunan belum terpenuhi.\n";
 		return;
 	}
@@ -1242,6 +1494,16 @@ bool GameEngine::auctionProperty(PropertyTile& property, Player& trigger) {
 	int passCount = 0;
 	const auto& players = gameState.getPlayers();
 	const int total = static_cast<int>(players.size());
+	int activeParticipants = 0;
+	for (Player* bidder : players) {
+		if (bidder && !bidder->isBankrupt()) {
+			++activeParticipants;
+		}
+	}
+	if (activeParticipants <= 0) {
+		return false;
+	}
+
 	int index = 0;
 	for (int i = 0; i < total; ++i) {
 		if (players[i] == &trigger) {
@@ -1250,7 +1512,8 @@ bool GameEngine::auctionProperty(PropertyTile& property, Player& trigger) {
 		}
 	}
 
-	while (passCount < std::max(1, total - 1)) {
+	const int passThreshold = std::max(1, activeParticipants - 1);
+	while (true) {
 		Player* bidder = players[index];
 		index = (index + 1) % total;
 		if (!bidder || bidder->isBankrupt()) {
@@ -1269,10 +1532,30 @@ bool GameEngine::auctionProperty(PropertyTile& property, Player& trigger) {
 				highestBid = bid;
 				winner = bidder;
 				passCount = 0;
+				transactionLogger.log(gameState.getCurrentTurn(), bidder->getUsername(), "LELANG_BID",
+					"Bid " + Money(bid).toString() + " untuk " + propertyLabel(property));
 				continue;
 			}
 		}
+
+		if (!winner && passCount + 1 >= activeParticipants) {
+			const int forcedBid = std::max(0, highestBid + 1);
+			if (bidder->canAfford(Money(forcedBid))) {
+				highestBid = forcedBid;
+				winner = bidder;
+				passCount = 0;
+				transactionLogger.log(gameState.getCurrentTurn(), bidder->getUsername(), "LELANG_BID",
+					"Bid paksa " + Money(forcedBid).toString() + " untuk " + propertyLabel(property));
+				continue;
+			}
+		}
+
+		transactionLogger.log(gameState.getCurrentTurn(), bidder->getUsername(), "LELANG_PASS",
+			"Pass pada lelang " + propertyLabel(property));
 		++passCount;
+		if (winner && passCount >= passThreshold) {
+			break;
+		}
 	}
 
 	if (!winner) {
@@ -1298,10 +1581,7 @@ bool GameEngine::handleAuctionCommand(const std::string& input, Player& player) 
 }
 
 void GameEngine::checkBankruptcy(Player& player) {
-	if (bankruptcyManager.isBankrupt(player.getMoney().getAmount())) {
-		player.setStatus(PlayerStatus::BANKRUPT);
-		eventBus.publish(BankruptcyEvent(gameState.getCurrentTurn(), player.getUsername(), "Player bankrupt"));
-	}
+	(void)player;
 }
 
 std::string GameEngine::normalizeCommandToken(const std::string& input) const {
@@ -1336,6 +1616,23 @@ void GameEngine::handleJailTurn(Player& player) {
 	gameState.setExtraRollAvailable(false);
 
 	const Money fine(gameConfig.getJailFine());
+
+	if (player.getJailTurnsRemaining() < 2) {
+		if (PlayerController* controller = player.getController()) {
+			if (controller->decideJailPay()) {
+				const Money due = player.applyOutgoingModifiers(fine);
+				if (!player.canAfford(due)) {
+					std::cout << "Uang tidak cukup untuk membayar denda penjara.\n";
+					executeBankruptcy(player, nullptr, fine);
+					return;
+				}
+				bank.collectFromPlayer(player, fine, "Denda penjara");
+				player.setStatus(PlayerStatus::ACTIVE);
+				player.resetJailTurns();
+				transactionLogger.log(gameState.getCurrentTurn(), player.getUsername(), "PENJARA", "Bayar denda sebelum lempar");
+			}
+		}
+	}
 
 	if (player.getJailTurnsRemaining() >= 2) {
 		const Money due = player.applyOutgoingModifiers(fine);
@@ -1396,58 +1693,151 @@ void GameEngine::handleJailTurn(Player& player) {
 	endTurn(player);
 }
 
-void GameEngine::executeBankruptcy(Player& debtor, Player* creditor, Money) {
+void GameEngine::executeBankruptcy(Player& debtor, Player* creditor, Money obligation) {
 	if (debtor.isBankrupt()) {
 		return;
+	}
+
+	auto applyLiquidationOption = [&](const LiquidationOption& option) -> bool {
+		PropertyTile* property = board.getPropertyByCode(normalizeCode(option.code));
+		if (!property || property->getOwner() != &debtor) {
+			return false;
+		}
+
+		if (option.type == LiquidationType::SELL) {
+			if (property->isMortgaged()) {
+				return false;
+			}
+
+			const Money value = propertySaleValue(*property);
+			festivalManager.removeEffectsForProperty(property);
+			if (auto* street = dynamic_cast<StreetTile*>(property)) {
+				demolishAllBuildings(*street);
+			}
+			debtor.removeProperty(property);
+			property->setOwner(nullptr);
+			property->setStatus(PropertyStatus::BANK);
+			bank.payPlayer(debtor, value, "Likuidasi jual ke bank");
+			board.updateMonopolies();
+			transactionLogger.log(gameState.getCurrentTurn(), debtor.getUsername(), "LIKUIDASI",
+				"Jual " + propertyLabel(*property) + " ke Bank " + value.toString());
+			return true;
+		}
+
+		if (option.type == LiquidationType::MORTGAGE) {
+			if (!canMortgagePropertyNow(*property, board)) {
+				return false;
+			}
+
+			property->setStatus(PropertyStatus::MORTGAGED);
+			bank.payPlayer(debtor, property->getMortgageValue(), "Likuidasi gadai");
+			board.updateMonopolies();
+			transactionLogger.log(gameState.getCurrentTurn(), debtor.getUsername(), "LIKUIDASI",
+				"Gadai " + propertyLabel(*property) + " " + property->getMortgageValue().toString());
+			return true;
+		}
+
+		return false;
+	};
+
+	if (obligation.isPositive()) {
+		LiquidationState liquidationState = buildLiquidationStateSnapshot(debtor, board, obligation);
+		if (liquidationState.maxLiquidation >= obligation) {
+			transactionLogger.log(gameState.getCurrentTurn(), debtor.getUsername(), "LIKUIDASI",
+				"Wajib likuidasi untuk menutup kewajiban " + obligation.toString());
+			while (!debtor.canAfford(obligation)) {
+				liquidationState = buildLiquidationStateSnapshot(debtor, board, obligation);
+				if (liquidationState.options.empty()) {
+					break;
+				}
+
+				int choice = 0;
+				if (PlayerController* controller = debtor.getController()) {
+					choice = controller->decideLiquidation(liquidationState);
+				}
+
+				const LiquidationOption* selected = nullptr;
+				for (const LiquidationOption& option : liquidationState.options) {
+					if (option.index == choice) {
+						selected = &option;
+						break;
+					}
+				}
+				if (!selected) {
+					selected = &*std::max_element(
+						liquidationState.options.begin(),
+						liquidationState.options.end(),
+						[](const LiquidationOption& a, const LiquidationOption& b) {
+							return a.value < b.value;
+						});
+				}
+				if (!selected || !applyLiquidationOption(*selected)) {
+					break;
+				}
+			}
+
+			if (debtor.canAfford(obligation)) {
+				if (creditor && !creditor->isBankrupt() && creditor != &debtor) {
+					bank.transferBetweenPlayers(debtor, *creditor, obligation, "Pelunasan likuidasi");
+					transactionLogger.log(gameState.getCurrentTurn(), debtor.getUsername(), "LIKUIDASI",
+						"Lunas ke " + creditor->getUsername() + " " + obligation.toString());
+				} else {
+					bank.collectFromPlayer(debtor, obligation, "Pelunasan likuidasi");
+					transactionLogger.log(gameState.getCurrentTurn(), debtor.getUsername(), "LIKUIDASI",
+						"Lunas ke Bank " + obligation.toString());
+				}
+				return;
+			}
+		}
 	}
 
 	debtor.setStatus(PlayerStatus::BANKRUPT);
 	eventBus.publish(BankruptcyEvent(gameState.getCurrentTurn(), debtor.getUsername(), "Bangkrut"));
 
 	const std::vector<PropertyTile*> props(debtor.getProperties());
-	for (PropertyTile* prop : props) {
-		if (!prop) {
-			continue;
+	transactionLogger.log(gameState.getCurrentTurn(), debtor.getUsername(), "BANGKRUT",
+		creditor && !creditor->isBankrupt() && creditor != &debtor
+			? ("Bangkrut ke " + creditor->getUsername())
+			: "Bangkrut ke Bank");
+
+	if (creditor && !creditor->isBankrupt() && creditor != &debtor) {
+		const Money remainingCash = debtor.getMoney();
+		if (!remainingCash.isZero()) {
+			bank.transferBetweenPlayers(debtor, *creditor, remainingCash, "Aset bangkrut");
 		}
-		festivalManager.removeEffectsForProperty(prop);
-		if (auto* street = dynamic_cast<StreetTile*>(prop)) {
-			while (street->getBuildingLevel() > 0) {
-				street->demolish();
+
+		for (PropertyTile* prop : props) {
+			if (!prop) {
+				continue;
 			}
-		}
-		debtor.removeProperty(prop);
-		prop->setOwner(nullptr);
-		prop->setStatus(PropertyStatus::BANK);
-	}
-
-	board.updateMonopolies();
-
-	for (PropertyTile* prop : props) {
-		if (!prop) {
-			continue;
-		}
-		if (creditor && !creditor->isBankrupt() && creditor != &debtor) {
+			festivalManager.removeEffectsForProperty(prop);
+			debtor.removeProperty(prop);
 			prop->setOwner(creditor);
-			prop->setStatus(PropertyStatus::OWNED);
 			creditor->addProperty(prop);
-		} else {
-			Player* trigger = nullptr;
-			for (Player* p : gameState.getTurnOrder()) {
-				if (p && !p->isBankrupt() && p != &debtor) {
-					trigger = p;
-					break;
-				}
+		}
+	} else {
+		const Money remainingCash = debtor.getMoney();
+		if (!remainingCash.isZero()) {
+			debtor.deductMoney(remainingCash);
+		}
+
+		for (PropertyTile* prop : props) {
+			if (!prop) {
+				continue;
 			}
-			if (!trigger) {
-				for (Player* p : gameState.getPlayers()) {
-					if (p && !p->isBankrupt() && p != &debtor) {
-						trigger = p;
-						break;
-					}
-				}
+			festivalManager.removeEffectsForProperty(prop);
+			if (auto* street = dynamic_cast<StreetTile*>(prop)) {
+				demolishAllBuildings(*street);
 			}
-			if (trigger) {
-				auctionProperty(*prop, *trigger);
+			debtor.removeProperty(prop);
+			prop->setOwner(nullptr);
+			prop->setStatus(PropertyStatus::BANK);
+		}
+
+		board.updateMonopolies();
+		for (PropertyTile* prop : props) {
+			if (prop) {
+				auctionProperty(*prop, debtor);
 			}
 		}
 	}

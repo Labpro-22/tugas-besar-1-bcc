@@ -2,18 +2,27 @@
 #include "models/Player.hpp"
 
 UtilityTile::UtilityTile(int id, const std::string& code, const std::string& name,
-						 Money price, Money mortgageValue)
-	: PropertyTile(id, code, name, TileType::UTILITY, price, mortgageValue) {}
+						 Money price, Money mortgageValue, const std::vector<int>& multipliers)
+		: PropertyTile(id, code, name, TileType::UTILITY, price, mortgageValue), multiplierTable(multipliers) {}
 
 Money UtilityTile::getRent(int diceRoll) const {
 	if (isMortgaged() || !getOwner() || diceRoll <= 0)
 		return Money::zero();
-	int count = getOwner()->countUtilities();
+
+	const int count = getOwner()->countUtilities();
 	int factor = 0;
-	switch (count) {
-		case 1: factor = 4; break;
-		case 2: factor = 10; break;
-		default: factor = 0; break;
+	if (count > 0) {
+		if (count < static_cast<int>(multiplierTable.size()) &&
+			multiplierTable[static_cast<std::size_t>(count)] > 0) {
+			factor = multiplierTable[static_cast<std::size_t>(count)];
+		} else {
+			for (int i = static_cast<int>(multiplierTable.size()) - 1; i >= 1; --i) {
+				if (multiplierTable[static_cast<std::size_t>(i)] > 0) {
+					factor = multiplierTable[static_cast<std::size_t>(i)];
+					break;
+				}
+			}
+		}
 	}
 	return Money(diceRoll * factor);
 }

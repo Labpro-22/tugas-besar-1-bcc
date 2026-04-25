@@ -15,12 +15,22 @@
 #include "models/Money.hpp"
 #include "models/Player.hpp"
 #include "models/board/header/Board.hpp"
+#include "models/cards/CardSystem.hpp"
+#include "models/cards/chance/ChanceGoToJailCard.hpp"
+#include "models/cards/chance/ChanceGoToNearestStationCard.hpp"
+#include "models/cards/chance/ChanceMoveBackThreeCard.hpp"
+#include "models/cards/community/BirthdayCard.hpp"
+#include "models/cards/community/DoctorFeeCard.hpp"
+#include "models/cards/community/ElectionCampaignCard.hpp"
 #include "models/cards/skill/DemolitionCard.hpp"
 #include "models/cards/skill/DiscountCard.hpp"
 #include "models/cards/skill/LassoCard.hpp"
 #include "models/cards/skill/MoveCard.hpp"
 #include "models/cards/skill/ShieldCard.hpp"
 #include "models/cards/skill/TeleportCard.hpp"
+#include "models/effects/DiscountEffect.hpp"
+#include "models/effects/Effect.hpp"
+#include "models/effects/ShieldEffect.hpp"
 #include "tile/header/PropertyTile.hpp"
 #include "tile/header/StreetTile.hpp"
 #include "tile/header/Tile.hpp"
@@ -110,6 +120,55 @@ std::unique_ptr<SkillCard> makeSkillCard(const std::string& type, const std::str
 	return nullptr;
 }
 
+std::unique_ptr<ChanceCard> makeChanceCard(const std::string& id) {
+	if (id == "ChanceGoToNearestStationCard") return std::make_unique<ChanceGoToNearestStationCard>();
+	if (id == "ChanceMoveBackThreeCard") return std::make_unique<ChanceMoveBackThreeCard>();
+	if (id == "ChanceGoToJailCard") return std::make_unique<ChanceGoToJailCard>();
+	return nullptr;
+}
+
+std::unique_ptr<CommunityChestCard> makeCommunityCard(const std::string& id) {
+	if (id == "BirthdayCard") return std::make_unique<BirthdayCard>();
+	if (id == "DoctorFeeCard") return std::make_unique<DoctorFeeCard>();
+	if (id == "ElectionCampaignCard") return std::make_unique<ElectionCampaignCard>();
+	return nullptr;
+}
+
+std::unique_ptr<SkillCard> makeSkillCardById(const std::string& id, const std::string& val, const std::string& dur) {
+	if (id == "MoveCard") return std::make_unique<MoveCard>(std::max(1, parseIntDefault(val, 1)));
+	if (id == "DiscountCard") return std::make_unique<DiscountCard>(parseIntDefault(val, 30), std::max(1, parseIntDefault(dur, 1)));
+	if (id == "ShieldCard") return std::make_unique<ShieldCard>(std::max(1, parseIntDefault(dur, 1)));
+	if (id == "TeleportCard") return std::make_unique<TeleportCard>();
+	if (id == "LassoCard") return std::make_unique<LassoCard>();
+	if (id == "DemolitionCard") return std::make_unique<DemolitionCard>();
+	return nullptr;
+}
+
+std::vector<std::string> splitPipe(const std::string& line) {
+	std::vector<std::string> parts;
+	std::size_t start = 0;
+	while (start <= line.size()) {
+		const std::size_t pos = line.find('|', start);
+		if (pos == std::string::npos) {
+			parts.push_back(line.substr(start));
+			break;
+		}
+		parts.push_back(line.substr(start, pos - start));
+		start = pos + 1;
+	}
+	return parts;
+}
+
+int readTaggedCount(const std::string& line, const std::string& tag) {
+	std::istringstream stream(line);
+	std::string header;
+	int count = 0;
+	if (!(stream >> header >> count) || header != tag) {
+		throw std::runtime_error("Malformed deck section: " + line);
+	}
+	return count;
+}
+
 void resetBoardProperties(Board& board) {
 	for (int i = 0; i < board.getSize(); ++i) {
 		Tile* tile = board.getTile(i);
@@ -164,7 +223,7 @@ std::vector<std::string> TextFileRepository::getPlayerNames(const std::string& i
 }
 
 bool TextFileRepository::save(const GameState& state, const Board& board, const TransactionLogger& logger,
-	const FestivalManager& festivals, const std::string& id) {
+	const FestivalManager& festivals, const CardSystem& cardSystem, const std::string& id) {
 	std::ofstream out(id);
 	if (!out) {
 		return false;
@@ -197,6 +256,7 @@ bool TextFileRepository::save(const GameState& state, const Board& board, const 
 			out << ' ' << skillTypeName(c->getCardType()) << ' ' << (v.empty() ? "-" : v) << ' '
 				<< (d.empty() ? "-" : d);
 		}
+		out << ' ' << p->getJailTurnsRemaining() << ' ' << p->getTurnCount();
 		out << '\n';
 	}
 
@@ -255,11 +315,61 @@ bool TextFileRepository::save(const GameState& state, const Board& board, const 
 		out << e.turn << '|' << e.username << '|' << e.actionType << '|' << e.detail << '\n';
 	}
 
+	std::vector<std::tuple<std::string, std::string, int, int>> serializedEffects;
+	for (Player* p : players) {
+		if (!p) continue;
+		for (Effect* effect : p->getActiveEffects()) {
+			if (!effect) continue;
+			int value = 0;
+			if (auto* discount = dynamic_cast<DiscountEffect*>(effect)) {
+				value = discount->getPercentage();
+			}
+			serializedEffects.emplace_back(
+				p->getUsername(),
+				toUpper(effect->getEffectType()),
+				value,
+				effect->getRemainingTurns());
+		}
+	}
+
+	out << "<EFFECT_STATE>\n";
+	out << static_cast<int>(serializedEffects.size()) << '\n';
+	for (const auto& effect : serializedEffects) {
+		out << std::get<0>(effect) << '|' << std::get<1>(effect) << '|' << std::get<2>(effect)
+			<< '|' << std::get<3>(effect) << '\n';
+	}
+
+	out << "<DECK_STATE>\n";
+	const auto writeSimpleDeck = [&](const std::string& tag, const auto& cards) {
+		out << tag << ' ' << static_cast<int>(cards.size()) << '\n';
+		for (const auto& card : cards) {
+			out << (card ? card->getId() : "") << '\n';
+		}
+	};
+	const auto writeSkillDeck = [&](const std::string& tag, const auto& cards) {
+		out << tag << ' ' << static_cast<int>(cards.size()) << '\n';
+		for (const auto& card : cards) {
+			if (!card) {
+				out << "||\n";
+				continue;
+			}
+			out << card->getId() << '|' << (card->getSaveValue().empty() ? "-" : card->getSaveValue())
+				<< '|' << (card->getSaveDuration().empty() ? "-" : card->getSaveDuration()) << '\n';
+		}
+	};
+
+	writeSimpleDeck("CHANCE_DRAW", cardSystem.getChanceDeck().getDrawCards());
+	writeSimpleDeck("CHANCE_USED", cardSystem.getChanceDeck().getUsedCards());
+	writeSimpleDeck("COMMUNITY_DRAW", cardSystem.getCommunityChestDeck().getDrawCards());
+	writeSimpleDeck("COMMUNITY_USED", cardSystem.getCommunityChestDeck().getUsedCards());
+	writeSkillDeck("SKILL_DRAW", cardSystem.getSkillDeck().getDrawCards());
+	writeSkillDeck("SKILL_USED", cardSystem.getSkillDeck().getUsedCards());
+
 	return static_cast<bool>(out);
 }
 
 bool TextFileRepository::loadInto(GameState& state, Board& board, TransactionLogger& logger, FestivalManager& festivals,
-	const std::string& id) {
+	CardSystem& cardSystem, const std::string& id) {
 	std::ifstream in(id);
 	if (!in) {
 		return false;
@@ -272,6 +382,11 @@ bool TextFileRepository::loadInto(GameState& state, Board& board, TransactionLog
 	for (Player* p : state.getPlayers()) {
 		if (p) {
 			p->clearSkillCardsAndEffects();
+			p->resetTurnFlags();
+			p->setStatus(PlayerStatus::ACTIVE);
+			p->setJailTurnsRemaining(0);
+			p->setConsecutiveDoubles(0);
+			p->setTurnCount(0);
 			byName[p->getUsername()] = p;
 		}
 	}
@@ -297,6 +412,8 @@ bool TextFileRepository::loadInto(GameState& state, Board& board, TransactionLog
 		std::string tileCode;
 		std::string statusTok;
 		int nCards = 0;
+		int jailTurns = 0;
+		int turnCount = 0;
 		if (!(ls >> username >> money >> tileCode >> statusTok >> nCards)) {
 			return false;
 		}
@@ -339,6 +456,12 @@ bool TextFileRepository::loadInto(GameState& state, Board& board, TransactionLog
 				}
 			}
 		}
+		if (!(ls >> jailTurns >> turnCount)) {
+			jailTurns = 0;
+			turnCount = 0;
+		}
+		player->setJailTurnsRemaining(jailTurns);
+		player->setTurnCount(turnCount);
 	}
 
 	std::string orderLine;
@@ -478,5 +601,141 @@ bool TextFileRepository::loadInto(GameState& state, Board& board, TransactionLog
 		loaded.push_back(std::move(e));
 	}
 	logger.loadFromSave(loaded);
+
+	std::string marker;
+	while (std::getline(in, marker)) {
+		if (marker.empty()) {
+			continue;
+		}
+
+		if (marker == "<EFFECT_STATE>") {
+			std::string countLine;
+			if (!std::getline(in, countLine)) {
+				return true;
+			}
+			int effectCount = 0;
+			{
+				std::istringstream es(countLine);
+				if (!(es >> effectCount)) {
+					return true;
+				}
+			}
+			for (int i = 0; i < effectCount; ++i) {
+				std::string effectLine;
+				if (!std::getline(in, effectLine)) {
+					break;
+				}
+				const std::vector<std::string> parts = splitPipe(effectLine);
+				if (parts.size() < 4) {
+					continue;
+				}
+				const auto it = byName.find(parts[0]);
+				if (it == byName.end() || !it->second) {
+					continue;
+				}
+				Player* player = it->second;
+				const std::string effectType = toUpper(parts[1]);
+				const int value = parseIntDefault(parts[2], 0);
+				const int turns = std::max(1, parseIntDefault(parts[3], 1));
+				if (effectType == "DISCOUNT") {
+					player->addEffect(new DiscountEffect(value, turns));
+				} else if (effectType == "SHIELD") {
+					player->addEffect(new ShieldEffect(turns));
+				}
+			}
+			continue;
+		}
+
+		if (marker == "<DECK_STATE>") {
+			cardSystem.getChanceDeck().clear();
+			cardSystem.getCommunityChestDeck().clear();
+			cardSystem.getSkillDeck().clear();
+
+			std::vector<CardDeck<ChanceCard>::CardPtr> chanceDraw;
+			std::vector<CardDeck<ChanceCard>::CardPtr> chanceUsed;
+			std::vector<CardDeck<CommunityChestCard>::CardPtr> communityDraw;
+			std::vector<CardDeck<CommunityChestCard>::CardPtr> communityUsed;
+			std::vector<CardDeck<SkillCard>::CardPtr> skillDraw;
+			std::vector<CardDeck<SkillCard>::CardPtr> skillUsed;
+
+			try {
+				std::string line;
+				if (!std::getline(in, line)) break;
+				const int chanceDrawCount = readTaggedCount(line, "CHANCE_DRAW");
+				for (int i = 0; i < chanceDrawCount; ++i) {
+					std::string idLine;
+					if (!std::getline(in, idLine)) break;
+					if (auto card = makeChanceCard(idLine)) {
+						chanceDraw.push_back(std::move(card));
+					}
+				}
+
+				if (!std::getline(in, line)) break;
+				const int chanceUsedCount = readTaggedCount(line, "CHANCE_USED");
+				for (int i = 0; i < chanceUsedCount; ++i) {
+					std::string idLine;
+					if (!std::getline(in, idLine)) break;
+					if (auto card = makeChanceCard(idLine)) {
+						chanceUsed.push_back(std::move(card));
+					}
+				}
+
+				if (!std::getline(in, line)) break;
+				const int communityDrawCount = readTaggedCount(line, "COMMUNITY_DRAW");
+				for (int i = 0; i < communityDrawCount; ++i) {
+					std::string idLine;
+					if (!std::getline(in, idLine)) break;
+					if (auto card = makeCommunityCard(idLine)) {
+						communityDraw.push_back(std::move(card));
+					}
+				}
+
+				if (!std::getline(in, line)) break;
+				const int communityUsedCount = readTaggedCount(line, "COMMUNITY_USED");
+				for (int i = 0; i < communityUsedCount; ++i) {
+					std::string idLine;
+					if (!std::getline(in, idLine)) break;
+					if (auto card = makeCommunityCard(idLine)) {
+						communityUsed.push_back(std::move(card));
+					}
+				}
+
+				if (!std::getline(in, line)) break;
+				const int skillDrawCount = readTaggedCount(line, "SKILL_DRAW");
+				for (int i = 0; i < skillDrawCount; ++i) {
+					std::string idLine;
+					if (!std::getline(in, idLine)) break;
+					const std::vector<std::string> parts = splitPipe(idLine);
+					if (parts.size() < 3) continue;
+					if (auto card = makeSkillCardById(parts[0], parts[1], parts[2])) {
+						skillDraw.push_back(std::move(card));
+					}
+				}
+
+				if (!std::getline(in, line)) break;
+				const int skillUsedCount = readTaggedCount(line, "SKILL_USED");
+				for (int i = 0; i < skillUsedCount; ++i) {
+					std::string idLine;
+					if (!std::getline(in, idLine)) break;
+					const std::vector<std::string> parts = splitPipe(idLine);
+					if (parts.size() < 3) continue;
+					if (auto card = makeSkillCardById(parts[0], parts[1], parts[2])) {
+						skillUsed.push_back(std::move(card));
+					}
+				}
+			} catch (const std::exception&) {
+				cardSystem.initializeDecks();
+				continue;
+			}
+
+			cardSystem.getChanceDeck().setDrawCards(std::move(chanceDraw));
+			cardSystem.getChanceDeck().setUsedCards(std::move(chanceUsed));
+			cardSystem.getCommunityChestDeck().setDrawCards(std::move(communityDraw));
+			cardSystem.getCommunityChestDeck().setUsedCards(std::move(communityUsed));
+			cardSystem.getSkillDeck().setDrawCards(std::move(skillDraw));
+			cardSystem.getSkillDeck().setUsedCards(std::move(skillUsed));
+		}
+	}
+
 	return true;
 }
