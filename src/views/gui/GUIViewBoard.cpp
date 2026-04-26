@@ -270,13 +270,11 @@ void GUIView::showBoard(const GameStateView& state) {
     DrawRectangleGradientV(0, 0, static_cast<int>(W), static_cast<int>(H),
                            gui::menu::makeColor(0x10, 0x14, 0x1e),
                            gui::menu::makeColor(0x06, 0x09, 0x12));
-    DrawCircleGradient(static_cast<int>(W * 0.50f),
-                       static_cast<int>(H * 0.18f),
+    DrawCircleGradient({W * 0.50f, H * 0.18f},
                        std::min(W, H) * 0.26f,
                        gui::menu::makeColor(0x5c, 0xd6, 0xff, 22),
                        RL_BLANK);
-    DrawCircleGradient(static_cast<int>(W * 0.72f),
-                       static_cast<int>(H * 0.68f),
+    DrawCircleGradient({W * 0.72f, H * 0.68f},
                        std::min(W, H) * 0.18f,
                        gui::menu::makeColor(0xff, 0xc1, 0x07, 12),
                        RL_BLANK);
@@ -436,6 +434,12 @@ void GUIView::drawLeftPanel(const GameStateView& state, Rectangle summaryRect, R
         currentPrompt_ &&
         currentPrompt_->type != GUIPromptType::NONE &&
         !currentPrompt_->resolved;
+    if (!promptActive) {
+        promptOptionScrollPx_ = 0;
+        promptOptionScrollType_ = GUIPromptType::NONE;
+        promptOptionScrollCount_ = 0;
+        promptOptionScrollLabel_.clear();
+    }
     drawPanelFrame(am, inputRect, "Pop Up", promptActive ? "aktif" : "standby", SURFACE_BG);
     {
         const Rectangle body = panelBodyRect(inputRect, 56.f, 14.f);
@@ -595,25 +599,120 @@ void GUIView::drawLeftPanel(const GameStateView& state, Rectangle summaryRect, R
                 cy += 17.f;
             }
 
-            if (prompt.type == GUIPromptType::MENU_CHOICE && !prompt.options.empty()) {
-                cy += 6.f;
-                for (int i = 0; i < static_cast<int>(prompt.options.size()) && cy < contentBottom - 20.f; ++i) {
-                    const std::string optionLine =
-                        std::to_string(i) + ". " + prompt.options[static_cast<size_t>(i)];
-                    auto optionLines = gui::draw::wrapText(am, "regular", optionLine, 14.f, body.width - 6.f);
-                    for (const std::string& line : optionLines) {
-                        if (cy >= contentBottom - 18.f) {
-                            break;
+            if ((prompt.type == GUIPromptType::MENU_CHOICE ||
+                 prompt.type == GUIPromptType::SKILL_CARD) &&
+                !prompt.options.empty()) {
+                const float listTop = cy + 6.f;
+                const float listHeight = std::max(0.f, contentBottom - 18.f - listTop);
+                if (listHeight > 2.f) {
+                    std::vector<std::vector<std::string>> wrappedEntries;
+                    std::vector<RaylibColor> entryColors;
+                    std::vector<float> entryHeights;
+                    wrappedEntries.reserve(prompt.options.size());
+                    entryColors.reserve(prompt.options.size());
+                    entryHeights.reserve(prompt.options.size());
+
+                    float totalContentHeight = 0.f;
+                    for (int i = 0; i < static_cast<int>(prompt.options.size()); ++i) {
+                        std::string optionLine;
+                        RaylibColor optionColor = TEXT_PRIMARY;
+                        if (prompt.type == GUIPromptType::SKILL_CARD) {
+                            optionLine = prompt.options[static_cast<size_t>(i)];
+                            optionColor = (i % 2 == 0) ? TEXT_PRIMARY : TEXT_MUTED;
+                        } else {
+                            optionLine = std::to_string(i) + ". " + prompt.options[static_cast<size_t>(i)];
                         }
-                        DrawTextEx(am.font("regular"),
-                                   line.c_str(),
-                                   Vector2{body.x + 6.f, cy},
-                                   14.f,
-                                   0.f,
-                                   TEXT_PRIMARY);
-                        cy += 16.f;
+
+                        auto optionLines = gui::draw::wrapText(am, "regular", optionLine, 14.f, body.width - 14.f);
+                        if (optionLines.empty()) {
+                            optionLines.push_back(" ");
+                        }
+
+                        const float gapAfter =
+                            (prompt.type == GUIPromptType::SKILL_CARD && i % 2 == 1) ? 8.f : 4.f;
+                        const float entryHeight = static_cast<float>(optionLines.size()) * 16.f + gapAfter;
+                        wrappedEntries.push_back(std::move(optionLines));
+                        entryColors.push_back(optionColor);
+                        entryHeights.push_back(entryHeight);
+                        totalContentHeight += entryHeight;
                     }
-                    cy += 4.f;
+
+                    if (promptOptionScrollType_ != prompt.type ||
+                        promptOptionScrollCount_ != static_cast<int>(prompt.options.size()) ||
+                        promptOptionScrollLabel_ != prompt.label) {
+                        promptOptionScrollPx_ = 0;
+                        promptOptionScrollType_ = prompt.type;
+                        promptOptionScrollCount_ = static_cast<int>(prompt.options.size());
+                        promptOptionScrollLabel_ = prompt.label;
+                    }
+
+                    const int maxScroll =
+                        std::max(0, static_cast<int>(std::ceil(totalContentHeight - listHeight)));
+
+                    const Rectangle listRect{body.x, listTop, body.width, listHeight};
+                    if (CheckCollisionPointRec(GetMousePosition(), listRect)) {
+                        const float wheel = GetMouseWheelMove();
+                        if (wheel != 0.f) {
+                            promptOptionScrollPx_ -= static_cast<int>(wheel * 32.f);
+                        }
+                    }
+                    if (IsKeyPressed(KEY_DOWN)) {
+                        promptOptionScrollPx_ += 24;
+                    }
+                    if (IsKeyPressed(KEY_UP)) {
+                        promptOptionScrollPx_ -= 24;
+                    }
+                    promptOptionScrollPx_ = std::clamp(promptOptionScrollPx_, 0, maxScroll);
+
+                    BeginScissorMode(static_cast<int>(listRect.x),
+                                     static_cast<int>(listRect.y),
+                                     static_cast<int>(listRect.width),
+                                     static_cast<int>(listRect.height));
+                    float drawY = listTop - static_cast<float>(promptOptionScrollPx_);
+                    for (size_t i = 0; i < wrappedEntries.size(); ++i) {
+                        const auto& lines = wrappedEntries[i];
+                        const RaylibColor color = entryColors[i];
+
+                        for (const std::string& line : lines) {
+                            DrawTextEx(am.font("regular"),
+                                       line.c_str(),
+                                       Vector2{body.x + 6.f, drawY},
+                                       14.f,
+                                       0.f,
+                                       color);
+                            drawY += 16.f;
+                        }
+
+                        drawY += entryHeights[i] - static_cast<float>(lines.size()) * 16.f;
+                    }
+                    EndScissorMode();
+
+                    if (maxScroll > 0) {
+                        const float trackX = body.x + body.width - 4.f;
+                        DrawRectangleRounded(Rectangle{trackX, listTop, 3.f, listHeight},
+                                             1.f,
+                                             2,
+                                             gui::menu::makeColor(255, 255, 255, 24));
+                        const float thumbH = std::max(24.f, listHeight * (listHeight / totalContentHeight));
+                        const float travel = std::max(0.f, listHeight - thumbH);
+                        const float t = (maxScroll == 0)
+                                            ? 0.f
+                                            : static_cast<float>(promptOptionScrollPx_) / static_cast<float>(maxScroll);
+                        DrawRectangleRounded(Rectangle{trackX,
+                                                       listTop + travel * t,
+                                                       3.f,
+                                                       thumbH},
+                                             1.f,
+                                             2,
+                                             gui::menu::makeColor(0x7d, 0xb4, 0xec, 220));
+
+                        DrawTextEx(am.font("regular"),
+                                   "Scroll: wheel / Up-Down",
+                                   Vector2{body.x, contentBottom - 14.f},
+                                   12.f,
+                                   0.f,
+                                   TEXT_MUTED);
+                    }
                 }
             }
         }
@@ -853,23 +952,44 @@ void GUIView::drawRightPanel(const GameStateView& state, Rectangle logRect, Rect
 void GUIView::drawPropertyPanel(const GameStateView& state, Rectangle rect) {
 #if NIMONSPOLY_ENABLE_RAYLIB
     AssetManager& am = AssetManager::get();
+
+    auto hasPlayer = [&](const std::string& username) {
+        for (const PlayerView& player : state.players) {
+            if (player.username == username) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    if (propertyPanelOwner_.empty() || !hasPlayer(propertyPanelOwner_)) {
+        propertyPanelOwner_ = state.currentPlayerName;
+    }
+
+    const std::string ownerName = propertyPanelOwner_.empty()
+        ? state.currentPlayerName
+        : propertyPanelOwner_;
+
     drawPanelFrame(am,
                    rect,
-                   "Properti Milikku",
-                   state.currentPlayerName.empty() ? "Tidak ada pemilik aktif" : state.currentPlayerName,
+                   "Properti Pemain",
+                   ownerName.empty() ? "Tidak ada pemilik aktif" : ownerName,
                    SURFACE_BG);
 
     const Rectangle body = panelBodyRect(rect, 56.f, 14.f);
     std::vector<const PropertyView*> myProperties;
     for (const auto& property : state.properties) {
-        if (property.ownerName == state.currentPlayerName) {
+        if (property.ownerName == ownerName) {
             myProperties.push_back(&property);
         }
     }
 
     if (myProperties.empty()) {
+        const std::string emptyMessage = ownerName.empty()
+            ? "Belum ada properti yang dimiliki pemain aktif."
+            : ("Belum ada properti yang dimiliki " + ownerName + ".");
         DrawTextEx(am.font("regular"),
-                   "Belum ada properti yang dimiliki pemain aktif.",
+                   emptyMessage.c_str(),
                    Vector2{body.x, body.y + 10.f},
                    16.f,
                    0.f,
@@ -944,6 +1064,16 @@ void GUIView::drawPropertyPanel(const GameStateView& state, Rectangle rect) {
                                  gui::menu::makeColor(0xff, 0x4d, 0x4d, 28),
                                  gui::menu::makeColor(0xff, 0x4d, 0x4d, 110));
             drawTextCentered(am.font("bold"), "MRTG", 12.f, gui::menu::makeColor(0xff, 0xc4, 0xc4), mortRect);
+        }
+
+        if (property->festivalTurnsRemaining > 0) {
+            const Rectangle festRect{card.x + 8.f, card.y + card.height - 30.f, card.width - 16.f, 18.f};
+            gui::draw::drawPanel(festRect,
+                                 gui::menu::makeColor(0xff, 0xd4, 0x66, 24),
+                                 gui::menu::makeColor(0xff, 0xd4, 0x66, 90));
+            const std::string festLabel = "FEST x" + std::to_string(property->festivalMultiplier) +
+                                          " (" + std::to_string(property->festivalTurnsRemaining) + "t)";
+            drawTextCentered(am.font("bold"), festLabel, 11.f, gui::menu::makeColor(0xff, 0xe8, 0xb0), festRect);
         }
 
         x += cardW + gap;
@@ -1199,6 +1329,20 @@ void GUIView::handleInGameClick(float mx, float my, std::string& outCommand, con
             diceAnimElapsed_ = 0.f;
             outCommand = "DADU";
         }
+        return;
+    }
+
+    const Rectangle playersBody = panelBodyRect(layout.playersPanel, 56.f, 14.f);
+    constexpr float rowGap = 10.f;
+    constexpr float rowH = 62.f;
+    float y = playersBody.y;
+    for (size_t i = 0; i < state.players.size(); ++i) {
+        const Rectangle row{playersBody.x, y, playersBody.width, rowH};
+        if (CheckCollisionPointRec(Vector2{mx, my}, row)) {
+            propertyPanelOwner_ = state.players[i].username;
+            return;
+        }
+        y += rowH + rowGap;
     }
 #else
     (void)mx;

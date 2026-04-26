@@ -97,6 +97,10 @@ private:
     int logScrollOffset_{0};
     const GUIPromptState* currentPrompt_{nullptr};
     WinnerInfo winnerInfo_;
+    int promptOptionScrollPx_{0};
+    GUIPromptType promptOptionScrollType_{GUIPromptType::NONE};
+    int promptOptionScrollCount_{0};
+    std::string promptOptionScrollLabel_;
 
     bool diceAnimating_{false};
     float diceAnimElapsed_{0.f};
@@ -113,6 +117,7 @@ private:
 
     std::string saveLoadStatus_;
     int saveLoadStatusFrames_{0};
+    std::string propertyPanelOwner_;
     std::chrono::steady_clock::time_point gameStartedAt_{};
     bool gameTimerRunning_{false};
 
