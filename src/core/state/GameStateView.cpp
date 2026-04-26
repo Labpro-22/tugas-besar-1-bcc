@@ -79,12 +79,13 @@ void GameStateView::refresh(
 		view.status = player->getStatus();
 		view.propertyCount = static_cast<int>(player->getProperties().size());
 		view.skillCardCount = static_cast<int>(player->getSkillCards().size());
+		view.colorIndex = player->getColorIndex();
 		players.push_back(view);
 	}
 
 	std::map<std::string, int> ownerColorIndexByName;
 	for (std::size_t i = 0; i < players.size(); ++i) {
-		ownerColorIndexByName[players[i].username] = static_cast<int>(i);
+		ownerColorIndexByName[players[i].username] = players[i].colorIndex;
 	}
 
 	properties.clear();

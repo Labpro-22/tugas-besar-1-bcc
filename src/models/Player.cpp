@@ -316,3 +316,11 @@ int Player::countActiveOthers(const std::vector<Player*>& players, const Player&
     }
     return count;
 }
+
+int Player::getColorIndex() const {
+    return colorIndex;
+}
+
+void Player::setColorIndex(int index) {
+    colorIndex = index;
+}

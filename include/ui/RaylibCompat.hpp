@@ -36,10 +36,6 @@ inline void DrawCircleGradientCompat(Vector2 center,
                                      float radius,
                                      RaylibColor inner,
                                      RaylibColor outer) {
-    DrawCircleGradient(static_cast<int>(std::lround(center.x)),
-                       static_cast<int>(std::lround(center.y)),
-                       radius,
-                       inner,
-                       outer);
+    DrawCircleGradient(center, radius, inner, outer);
 }
 #endif

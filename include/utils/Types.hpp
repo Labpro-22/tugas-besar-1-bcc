@@ -76,6 +76,7 @@ public:
     PlayerStatus status;
     int propertyCount;
     int skillCardCount;
+    int colorIndex{-1};
 };
 
 class PropertyView{

@@ -671,10 +671,10 @@ namespace {
         if (tile.type != TileType::STREET) {
             return 1;
         }
-        if (tile.hasHotel || tile.buildingLevel >= 4) {
+        if (tile.hasHotel) {
             return 5;
         }
-        return std::clamp(tile.buildingLevel + 1, 1, 4);
+        return std::clamp(tile.buildingLevel, 0, 4);
     }
 
     const char* buildingMarkerPath(const TileData& tile, bool hotel) {

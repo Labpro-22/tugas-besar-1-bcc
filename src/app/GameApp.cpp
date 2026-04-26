@@ -101,6 +101,10 @@ int GameApp::run() {
 
             ownedPlayers.push_back(std::make_unique<Player>(
                 name, Money(engine.getConfig().getStartingMoney()), controller.get()));
+            const int colorIdx = (i < static_cast<int>(view.setup().playerColors.size()))
+                                     ? view.setup().playerColors[static_cast<size_t>(i)]
+                                     : i % 4;
+            ownedPlayers.back()->setColorIndex(colorIdx);
             ownedControllers.push_back(std::move(controller));
             players.push_back(ownedPlayers.back().get());
         }
@@ -149,6 +153,7 @@ int GameApp::run() {
             view.setup().playerNames.push_back(useName);
             view.setup().playerColors.push_back(static_cast<int>(players.size()) % 4);
             view.setup().playerCharacters.push_back(static_cast<int>(players.size()) % 4);
+            ownedPlayers.back()->setColorIndex(view.setup().playerColors.back());
             ownedControllers.push_back(std::move(controller));
             players.push_back(ownedPlayers.back().get());
         }
