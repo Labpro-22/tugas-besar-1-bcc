@@ -8,9 +8,11 @@
 #include "models/board/header/ColorGroup.hpp"
 #include "tile/header/Tile.hpp"
 #include "utils/Enums.hpp"
+#include "ui/UiDtos.hpp"
 
 class StreetTile;
 class PropertyTile;
+class Player;
 
 class Board {
 public:
@@ -35,6 +37,7 @@ public:
 	ColorGroup* ensureColorGroup(Color color);
 	ColorGroup* getColorGroup(Color color) const;
 	void updateMonopolies();
+	BuildMenuState getBuildMenuState(const Player& player) const;
 
 private:
 	std::vector<std::unique_ptr<Tile>> tiles;

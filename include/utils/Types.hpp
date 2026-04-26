@@ -17,6 +17,7 @@ class Dice;
 class Player;
 class Board;
 class PropertyTile;
+class TurnManager;
 
 class GameContext{
 public:
@@ -28,6 +29,12 @@ public:
     vector<Player*>& players;
     Board& board;
     int currentTurn;
+    class CardSystem* cardSystem;
+    class AuctionManager* auctionManager;
+    class BankruptcyManager* bankruptcyManager;
+    class EventBus* eventBus;
+    class GameState* gameState;
+    TurnManager* turnManager;
 };
 
 class LandingResult{
@@ -108,6 +115,9 @@ public:
     bool hasHotel{false};
     int festivalMultiplier{1};
     int festivalTurnsRemaining{0};
+    std::vector<int> rentLevels;
+    int houseCost{0};
+    int hotelCost{0};
 };
 
 using TileView = TileData;
