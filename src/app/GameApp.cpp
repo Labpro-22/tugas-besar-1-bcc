@@ -96,7 +96,7 @@ int GameApp::run() {
             if (isComputer) {
                 controller = std::make_unique<ComputerController>(name);
             } else {
-                controller = std::make_unique<HumanController>(&input, name);
+                controller = std::make_unique<HumanController>(&input, &view, name);
             }
 
             ownedPlayers.push_back(std::make_unique<Player>(
@@ -143,7 +143,7 @@ int GameApp::run() {
         for (const std::string& name : names) {
             const std::string useName =
                 name.empty() ? "P" + std::to_string(players.size() + 1) : name;
-            auto controller = std::make_unique<HumanController>(&input, useName);
+            auto controller = std::make_unique<HumanController>(&input, &view, useName);
             ownedPlayers.push_back(std::make_unique<Player>(
                 useName, Money(engine.getConfig().getStartingMoney()), controller.get()));
             view.setup().playerNames.push_back(useName);

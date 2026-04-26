@@ -1,7 +1,9 @@
 #include "controllers/HumanController.hpp"
 
-HumanController::HumanController(IGameInput* input, const string& playerName)
-    : input(input), playerName_(playerName) {}
+#include "ui/IGameView.hpp"
+
+HumanController::HumanController(IGameInput* input, IGameView* view, const string& playerName)
+    : input(input), view_(view), playerName_(playerName) {}
 
 string HumanController::chooseCommand(const GameStateView& state) {
     (void)state;
@@ -9,8 +11,9 @@ string HumanController::chooseCommand(const GameStateView& state) {
 }
 
 bool HumanController::decideBuyProperty(const PropertyInfo& info, Money money) {
-    (void)info;
-    (void)money;
+    if (view_) {
+        view_->showBuyPrompt(info, money);
+    }
     return input->getYesNo("Apakah kamu ingin membeli properti ini? (y/n)");
 }
 

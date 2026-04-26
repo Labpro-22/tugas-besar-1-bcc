@@ -3,9 +3,11 @@
 #include "controllers/PlayerController.hpp"
 #include "ui/IGameInput.hpp"
 
+class IGameView;
+
 class HumanController final : public PlayerController {
 public:
-    explicit HumanController(IGameInput* input, const string& playerName = "");
+    explicit HumanController(IGameInput* input, IGameView* view = nullptr, const string& playerName = "");
 
     string chooseCommand(const GameStateView& state) override;
 
@@ -27,5 +29,6 @@ public:
 
 private:
     IGameInput* input;
+    IGameView* view_;
     string playerName_;
 };

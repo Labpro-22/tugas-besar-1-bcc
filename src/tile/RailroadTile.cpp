@@ -31,14 +31,5 @@ Money RailroadTile::getRent(int /*diceRoll*/) const {
 }
 
 void RailroadTile::onLand(Player& player, GameContext& ctx, int diceTotal) {
-	if (!getOwner()) {
-		setOwner(&player);
-		setStatus(PropertyStatus::OWNED);
-		player.addProperty(this);
-		ctx.board.updateMonopolies();
-		ctx.logger.log(ctx.currentTurn, player.getUsername(), "RAILROAD",
-			getLabel() + " kini dimiliki otomatis");
-		return;
-	}
 	PropertyTile::onLand(player, ctx, diceTotal);
 }

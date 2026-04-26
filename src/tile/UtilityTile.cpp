@@ -32,14 +32,5 @@ Money UtilityTile::getRent(int diceRoll) const {
 }
 
 void UtilityTile::onLand(Player& player, GameContext& ctx, int diceTotal) {
-	if (!getOwner()) {
-		setOwner(&player);
-		setStatus(PropertyStatus::OWNED);
-		player.addProperty(this);
-		ctx.board.updateMonopolies();
-		ctx.logger.log(ctx.currentTurn, player.getUsername(), "UTILITY",
-			getLabel() + " kini dimiliki otomatis");
-		return;
-	}
 	PropertyTile::onLand(player, ctx, diceTotal);
 }
