@@ -75,98 +75,66 @@ PropertyStatus parsePropertyStatus(const std::string& t) {
 	return PropertyStatus::BANK;
 }
 
-std::string propertyKind(const PropertyTile& p) {
+std::string propertyKindLower(const PropertyTile& p) {
 	switch (p.getType()) {
-		case TileType::STREET: return "STREET";
-		case TileType::RAILROAD: return "RAILROAD";
-		case TileType::UTILITY: return "UTILITY";
-		default: return "OTHER";
+		case TileType::STREET: return "street";
+		case TileType::RAILROAD: return "railroad";
+		case TileType::UTILITY: return "utility";
+		default: return "other";
 	}
 }
 
-std::string skillTypeName(SkillCardType t) {
-	switch (t) {
-		case SkillCardType::MOVE: return "MOVE";
-		case SkillCardType::DISCOUNT: return "DISCOUNT";
-		case SkillCardType::SHIELD: return "SHIELD";
-		case SkillCardType::TELEPORT: return "TELEPORT";
-		case SkillCardType::LASSO: return "LASSO";
-		case SkillCardType::DEMOLITION: return "DEMOLITION";
+std::string cardSaveLine(const SkillCard* c) {
+	if (!c) return "";
+	std::string line = c->getId();
+	const std::string val = c->getSaveValue();
+	const std::string dur = c->getSaveDuration();
+	if (!val.empty()) {
+		line += ' ';
+		line += val;
+		if (!dur.empty()) {
+			line += ' ';
+			line += dur;
+		}
 	}
-	return "MOVE";
+	return line;
 }
 
 int parseIntDefault(const std::string& s, int defVal) {
 	if (s == "-" || s.empty()) {
 		return defVal;
 	}
-	return std::stoi(s);
+	try { return std::stoi(s); } catch (...) { return defVal; }
 }
 
-std::unique_ptr<SkillCard> makeSkillCard(const std::string& type, const std::string& val, const std::string& dur) {
-	if (type == "MOVE") {
-		const int steps = std::max(1, parseIntDefault(val, 1));
-		return std::make_unique<MoveCard>(steps);
-	}
-	if (type == "DISCOUNT") {
-		return std::make_unique<DiscountCard>(parseIntDefault(val, 30), parseIntDefault(dur, 1));
-	}
-	if (type == "SHIELD") {
-		return std::make_unique<ShieldCard>(std::max(1, parseIntDefault(dur, 1)));
-	}
-	if (type == "TELEPORT") return std::make_unique<TeleportCard>();
-	if (type == "LASSO") return std::make_unique<LassoCard>();
-	if (type == "DEMOLITION") return std::make_unique<DemolitionCard>();
+std::unique_ptr<SkillCard> makeSkillCardFromSpec(const std::string& name, const std::string& v1, const std::string& v2) {
+	if (name == "MoveCard" || name == "MOVE")
+		return std::make_unique<MoveCard>(std::max(1, parseIntDefault(v1, 3)));
+	if (name == "DiscountCard" || name == "DISCOUNT")
+		return std::make_unique<DiscountCard>(parseIntDefault(v1, 30), std::max(1, parseIntDefault(v2, 1)));
+	if (name == "ShieldCard" || name == "SHIELD")
+		return std::make_unique<ShieldCard>(std::max(1, parseIntDefault(v1, 1)));
+	if (name == "TeleportCard" || name == "TELEPORT") return std::make_unique<TeleportCard>();
+	if (name == "LassoCard" || name == "LASSO") return std::make_unique<LassoCard>();
+	if (name == "DemolitionCard" || name == "DEMOLITION") return std::make_unique<DemolitionCard>();
 	return nullptr;
 }
 
-std::unique_ptr<ChanceCard> makeChanceCard(const std::string& id) {
-	if (id == "ChanceGoToNearestStationCard") return std::make_unique<ChanceGoToNearestStationCard>();
-	if (id == "ChanceMoveBackThreeCard") return std::make_unique<ChanceMoveBackThreeCard>();
-	if (id == "ChanceGoToJailCard") return std::make_unique<ChanceGoToJailCard>();
+std::unique_ptr<SkillCard> makeDefaultSkillCard(const std::string& name) {
+	if (name == "MoveCard") return std::make_unique<MoveCard>(3);
+	if (name == "DiscountCard") return std::make_unique<DiscountCard>(30, 1);
+	if (name == "ShieldCard") return std::make_unique<ShieldCard>(1);
+	if (name == "TeleportCard") return std::make_unique<TeleportCard>();
+	if (name == "LassoCard") return std::make_unique<LassoCard>();
+	if (name == "DemolitionCard") return std::make_unique<DemolitionCard>();
 	return nullptr;
 }
 
-std::unique_ptr<CommunityChestCard> makeCommunityCard(const std::string& id) {
-	if (id == "BirthdayCard") return std::make_unique<BirthdayCard>();
-	if (id == "DoctorFeeCard") return std::make_unique<DoctorFeeCard>();
-	if (id == "ElectionCampaignCard") return std::make_unique<ElectionCampaignCard>();
-	return nullptr;
-}
-
-std::unique_ptr<SkillCard> makeSkillCardById(const std::string& id, const std::string& val, const std::string& dur) {
-	if (id == "MoveCard") return std::make_unique<MoveCard>(std::max(1, parseIntDefault(val, 1)));
-	if (id == "DiscountCard") return std::make_unique<DiscountCard>(parseIntDefault(val, 30), std::max(1, parseIntDefault(dur, 1)));
-	if (id == "ShieldCard") return std::make_unique<ShieldCard>(std::max(1, parseIntDefault(dur, 1)));
-	if (id == "TeleportCard") return std::make_unique<TeleportCard>();
-	if (id == "LassoCard") return std::make_unique<LassoCard>();
-	if (id == "DemolitionCard") return std::make_unique<DemolitionCard>();
-	return nullptr;
-}
-
-std::vector<std::string> splitPipe(const std::string& line) {
-	std::vector<std::string> parts;
-	std::size_t start = 0;
-	while (start <= line.size()) {
-		const std::size_t pos = line.find('|', start);
-		if (pos == std::string::npos) {
-			parts.push_back(line.substr(start));
-			break;
-		}
-		parts.push_back(line.substr(start, pos - start));
-		start = pos + 1;
-	}
-	return parts;
-}
-
-int readTaggedCount(const std::string& line, const std::string& tag) {
-	std::istringstream stream(line);
-	std::string header;
-	int count = 0;
-	if (!(stream >> header >> count) || header != tag) {
-		throw std::runtime_error("Malformed deck section: " + line);
-	}
-	return count;
+int timesAppliedFromFmult(int fmult) {
+	if (fmult >= 8) return 3;
+	if (fmult >= 4) return 2;
+	if (fmult >= 2) return 1;
+	return 0;
 }
 
 void resetBoardProperties(Board& board) {
@@ -196,28 +164,49 @@ std::vector<std::string> TextFileRepository::getPlayerNames(const std::string& i
 	if (!in) {
 		return {};
 	}
-	std::string header;
-	std::getline(in, header);
-	std::istringstream hs(header);
-	int currentTurn = 0;
-	int maxTurn = 0;
-	int nPlayers = 0;
-	if (!(hs >> currentTurn >> maxTurn >> nPlayers)) {
+	std::string turnLine;
+	if (!std::getline(in, turnLine)) {
 		return {};
+	}
+	std::string nPlayersLine;
+	if (!std::getline(in, nPlayersLine)) {
+		return {};
+	}
+	int nPlayers = 0;
+	{
+		std::istringstream ps(nPlayersLine);
+		if (!(ps >> nPlayers)) {
+			return {};
+		}
 	}
 	std::vector<std::string> names;
 	names.reserve(static_cast<std::size_t>(nPlayers));
 	for (int i = 0; i < nPlayers; ++i) {
-		std::string line;
-		if (!std::getline(in, line)) {
+		std::string statusLine;
+		if (!std::getline(in, statusLine)) {
 			break;
 		}
-		std::istringstream ls(line);
 		std::string username;
-		if (!(ls >> username)) {
-			break;
+		{
+			std::istringstream ls(statusLine);
+			if (!(ls >> username)) {
+				break;
+			}
 		}
 		names.push_back(username);
+		std::string cardCountLine;
+		if (!std::getline(in, cardCountLine)) {
+			break;
+		}
+		int nCards = 0;
+		{
+			std::istringstream cs(cardCountLine);
+			cs >> nCards;
+		}
+		for (int c = 0; c < nCards; ++c) {
+			std::string cardLine;
+			std::getline(in, cardLine);
+		}
 	}
 	return names;
 }
@@ -231,33 +220,29 @@ bool TextFileRepository::save(const GameState& state, const Board& board, const 
 
 	const auto& players = state.getPlayers();
 	const int nPlayers = static_cast<int>(players.size());
-	out << state.getCurrentTurn() << ' ' << state.getMaxTurn() << ' ' << nPlayers << ' ' << board.getSize() << '\n';
 
-	std::map<std::string, std::tuple<int, int, int>> festivalByCode;
+	out << state.getCurrentTurn() << ' ' << state.getMaxTurn() << '\n';
+	out << nPlayers << '\n';
+
+	std::map<std::string, std::pair<int, int>> festivalByCode;
 	for (const FestivalEffectSnapshot& snap : festivals.getActiveEffectsSnapshot()) {
 		if (snap.getProperty()) {
-			festivalByCode[snap.getProperty()->getCode()] =
-				std::make_tuple(snap.getMultiplier(), snap.getTurnsRemaining(), snap.getTimesApplied());
+			festivalByCode[snap.getProperty()->getCode()] = {snap.getMultiplier(), snap.getTurnsRemaining()};
 		}
 	}
 
 	for (Player* p : players) {
 		if (!p) continue;
 		Tile* tile = board.getTile(p->getPosition());
-		const std::string code = tile ? tile->getCode() : "GO";
-		out << p->getUsername() << ' ' << p->getMoney().getAmount() << ' ' << code << ' '
-			<< playerStatusToken(p->getStatus()) << ' ';
+		const std::string tileCode = tile ? tile->getCode() : "GO";
+		out << p->getUsername() << ' ' << p->getMoney().getAmount() << ' ' << tileCode << ' '
+			<< playerStatusToken(p->getStatus()) << ' ' << p->getTurnCount() << ' ' << p->getJailTurnsRemaining() << '\n';
 		const auto& cards = p->getSkillCards();
-		out << cards.size();
+		out << static_cast<int>(cards.size()) << '\n';
 		for (SkillCard* c : cards) {
 			if (!c) continue;
-			std::string v = c->getSaveValue();
-			std::string d = c->getSaveDuration();
-			out << ' ' << skillTypeName(c->getCardType()) << ' ' << (v.empty() ? "-" : v) << ' '
-				<< (d.empty() ? "-" : d);
+			out << cardSaveLine(c) << '\n';
 		}
-		out << ' ' << p->getJailTurnsRemaining() << ' ' << p->getTurnCount();
-		out << '\n';
 	}
 
 	const auto& order = state.getTurnOrder();
@@ -272,8 +257,7 @@ bool TextFileRepository::save(const GameState& state, const Board& board, const 
 
 	int propCount = 0;
 	for (int i = 0; i < board.getSize(); ++i) {
-		const Tile* tile = board.getTile(i);
-		if (dynamic_cast<const PropertyTile*>(tile)) {
+		if (dynamic_cast<const PropertyTile*>(board.getTile(i))) {
 			++propCount;
 		}
 	}
@@ -286,84 +270,34 @@ bool TextFileRepository::save(const GameState& state, const Board& board, const 
 
 		int fmult = 1;
 		int fdur = 0;
-		int timesApplied = 0;
 		const auto it = festivalByCode.find(prop->getCode());
 		if (it != festivalByCode.end()) {
-			fmult = std::get<0>(it->second);
-			fdur = std::get<1>(it->second);
-			timesApplied = std::get<2>(it->second);
+			fmult = it->second.first;
+			fdur = it->second.second;
 		}
 
-		std::string ownerName = "BANK";
-		if (prop->getOwner()) {
-			ownerName = prop->getOwner()->getUsername();
-		}
+		std::string ownerName = prop->getOwner() ? prop->getOwner()->getUsername() : "BANK";
 
-		int buildLevel = 0;
+		std::string buildStr = "0";
 		if (auto* street = dynamic_cast<StreetTile*>(prop)) {
-			buildLevel = street->getBuildingLevel();
+			buildStr = street->hasHotel() ? "H" : std::to_string(street->getBuildingLevel());
 		}
 
-		out << prop->getCode() << ' ' << propertyKind(*prop) << ' ' << ownerName << ' '
-			<< propertyStatusToken(prop->getStatus()) << ' ' << fmult << ' ' << fdur << ' ' << buildLevel << ' '
-			<< timesApplied << '\n';
+		out << prop->getCode() << ' ' << propertyKindLower(*prop) << ' ' << ownerName << ' '
+			<< propertyStatusToken(prop->getStatus()) << ' ' << fmult << ' ' << fdur << ' ' << buildStr << '\n';
+	}
+
+	const auto& skillDraw = cardSystem.getSkillDeck().getDrawCards();
+	out << static_cast<int>(skillDraw.size()) << '\n';
+	for (const auto& c : skillDraw) {
+		if (c) out << c->getId() << '\n';
 	}
 
 	const std::vector<LogEntry> log = logger.serializeForSave();
 	out << static_cast<int>(log.size()) << '\n';
 	for (const LogEntry& e : log) {
-		out << e.turn << '|' << e.username << '|' << e.actionType << '|' << e.detail << '\n';
+		out << e.turn << ' ' << e.username << ' ' << e.actionType << ' ' << e.detail << '\n';
 	}
-
-	std::vector<std::tuple<std::string, std::string, int, int>> serializedEffects;
-	for (Player* p : players) {
-		if (!p) continue;
-		for (Effect* effect : p->getActiveEffects()) {
-			if (!effect) continue;
-			int value = 0;
-			if (auto* discount = dynamic_cast<DiscountEffect*>(effect)) {
-				value = discount->getPercentage();
-			}
-			serializedEffects.emplace_back(
-				p->getUsername(),
-				toUpper(effect->getEffectType()),
-				value,
-				effect->getRemainingTurns());
-		}
-	}
-
-	out << "<EFFECT_STATE>\n";
-	out << static_cast<int>(serializedEffects.size()) << '\n';
-	for (const auto& effect : serializedEffects) {
-		out << std::get<0>(effect) << '|' << std::get<1>(effect) << '|' << std::get<2>(effect)
-			<< '|' << std::get<3>(effect) << '\n';
-	}
-
-	out << "<DECK_STATE>\n";
-	const auto writeSimpleDeck = [&](const std::string& tag, const auto& cards) {
-		out << tag << ' ' << static_cast<int>(cards.size()) << '\n';
-		for (const auto& card : cards) {
-			out << (card ? card->getId() : "") << '\n';
-		}
-	};
-	const auto writeSkillDeck = [&](const std::string& tag, const auto& cards) {
-		out << tag << ' ' << static_cast<int>(cards.size()) << '\n';
-		for (const auto& card : cards) {
-			if (!card) {
-				out << "||\n";
-				continue;
-			}
-			out << card->getId() << '|' << (card->getSaveValue().empty() ? "-" : card->getSaveValue())
-				<< '|' << (card->getSaveDuration().empty() ? "-" : card->getSaveDuration()) << '\n';
-		}
-	};
-
-	writeSimpleDeck("CHANCE_DRAW", cardSystem.getChanceDeck().getDrawCards());
-	writeSimpleDeck("CHANCE_USED", cardSystem.getChanceDeck().getUsedCards());
-	writeSimpleDeck("COMMUNITY_DRAW", cardSystem.getCommunityChestDeck().getDrawCards());
-	writeSimpleDeck("COMMUNITY_USED", cardSystem.getCommunityChestDeck().getUsedCards());
-	writeSkillDeck("SKILL_DRAW", cardSystem.getSkillDeck().getDrawCards());
-	writeSkillDeck("SKILL_USED", cardSystem.getSkillDeck().getUsedCards());
 
 	return static_cast<bool>(out);
 }
@@ -383,72 +317,93 @@ bool TextFileRepository::loadInto(GameState& state, Board& board, TransactionLog
 		if (p) {
 			p->clearSkillCardsAndEffects();
 			p->resetTurnFlags();
-			p->setStatus(PlayerStatus::ACTIVE);
-			p->setJailTurnsRemaining(0);
 			p->setConsecutiveDoubles(0);
-			p->setTurnCount(0);
 			byName[p->getUsername()] = p;
 		}
 	}
 
-	std::string header;
-	std::getline(in, header);
-	std::istringstream hs(header);
+	std::string turnLine;
+	if (!std::getline(in, turnLine)) {
+		return false;
+	}
 	int currentTurn = 0;
 	int maxTurn = 0;
-	int nPlayers = 0;
-	if (!(hs >> currentTurn >> maxTurn >> nPlayers)) {
+	{
+		std::istringstream hs(turnLine);
+		if (!(hs >> currentTurn >> maxTurn)) {
+			return false;
+		}
+	}
+
+	std::string nPlayersLine;
+	if (!std::getline(in, nPlayersLine)) {
 		return false;
+	}
+	int nPlayers = 0;
+	{
+		std::istringstream ps(nPlayersLine);
+		if (!(ps >> nPlayers)) {
+			return false;
+		}
 	}
 
 	for (int i = 0; i < nPlayers; ++i) {
-		std::string line;
-		if (!std::getline(in, line)) {
+		std::string statusLine;
+		if (!std::getline(in, statusLine)) {
 			return false;
 		}
-		std::istringstream ls(line);
 		std::string username;
 		int money = 0;
 		std::string tileCode;
 		std::string statusTok;
-		int nCards = 0;
-		int jailTurns = 0;
-		int turnCount = 0;
-		if (!(ls >> username >> money >> tileCode >> statusTok >> nCards)) {
+		int savedTurnCount = 0;
+		int savedJailTurns = 0;
+		{
+			std::istringstream ls(statusLine);
+			if (!(ls >> username >> money >> tileCode >> statusTok)) {
+				return false;
+			}
+			ls >> savedTurnCount >> savedJailTurns;
+		}
+
+		std::string cardCountLine;
+		if (!std::getline(in, cardCountLine)) {
 			return false;
 		}
-		Player* player = nullptr;
-		const auto it = byName.find(username);
-		if (it != byName.end()) {
-			player = it->second;
-		}
-		if (!player) {
-			for (int c = 0; c < nCards; ++c) {
-				std::string t, v, d;
-				ls >> t >> v >> d;
-			}
-			continue;
+		int nCards = 0;
+		{
+			std::istringstream cs(cardCountLine);
+			cs >> nCards;
 		}
 
-		player->deductMoney(player->getMoney());
-		player->addMoney(Money(money));
-		player->setStatus(parsePlayerStatus(statusTok));
-
-		Tile* at = board.getTileByCode(toUpper(tileCode));
-		if (at) {
-			player->setPosition(at->getId());
-		} else {
-			player->setPosition(0);
+		Player* player = byName.count(username) ? byName[username] : nullptr;
+		if (player) {
+			player->deductMoney(player->getMoney());
+			player->addMoney(Money(money));
+			player->setStatus(parsePlayerStatus(statusTok));
+			Tile* at = board.getTileByCode(toUpper(tileCode));
+			player->setPosition(at ? at->getId() : 0);
+			player->setTurnCount(savedTurnCount);
+			player->setJailTurnsRemaining(savedJailTurns);
 		}
 
 		for (int c = 0; c < nCards; ++c) {
-			std::string typeTok;
-			std::string valTok;
-			std::string durTok;
-			if (!(ls >> typeTok >> valTok >> durTok)) {
+			std::string cardLine;
+			if (!std::getline(in, cardLine)) {
 				break;
 			}
-			auto card = makeSkillCard(typeTok, valTok, durTok);
+			if (!player) {
+				continue;
+			}
+			std::istringstream cls(cardLine);
+			std::string cardType;
+			std::string v1;
+			std::string v2;
+			if (!(cls >> cardType)) {
+				continue;
+			}
+			cls >> v1 >> v2;
+			auto card = makeSkillCardFromSpec(cardType, v1, v2);
 			if (card) {
 				try {
 					player->addSkillCard(card.release());
@@ -456,12 +411,6 @@ bool TextFileRepository::loadInto(GameState& state, Board& board, TransactionLog
 				}
 			}
 		}
-		if (!(ls >> jailTurns >> turnCount)) {
-			jailTurns = 0;
-			turnCount = 0;
-		}
-		player->setJailTurnsRemaining(jailTurns);
-		player->setTurnCount(turnCount);
 	}
 
 	std::string orderLine;
@@ -486,17 +435,19 @@ bool TextFileRepository::loadInto(GameState& state, Board& board, TransactionLog
 	if (!std::getline(in, activeLine)) {
 		return false;
 	}
-	std::istringstream as(activeLine);
-	std::string activeName;
-	as >> activeName;
-	int activeIndex = 0;
-	for (std::size_t i = 0; i < newOrder.size(); ++i) {
-		if (newOrder[i] && newOrder[i]->getUsername() == activeName) {
-			activeIndex = static_cast<int>(i);
-			break;
+	{
+		std::istringstream as(activeLine);
+		std::string activeName;
+		as >> activeName;
+		int activeIndex = 0;
+		for (std::size_t i = 0; i < newOrder.size(); ++i) {
+			if (newOrder[i] && newOrder[i]->getUsername() == activeName) {
+				activeIndex = static_cast<int>(i);
+				break;
+			}
 		}
+		state.setActivePlayerIndex(activeIndex);
 	}
-	state.setActivePlayerIndex(activeIndex);
 	state.setCurrentTurn(currentTurn);
 	state.setMaxTurn(maxTurn);
 	state.setPhase(GamePhase::RUNNING);
@@ -525,17 +476,21 @@ bool TextFileRepository::loadInto(GameState& state, Board& board, TransactionLog
 		std::string pst;
 		int fmult = 1;
 		int fdur = 0;
+		std::string buildStr;
+		if (!(pls >> code >> kind >> ownerName >> pst >> fmult >> fdur >> buildStr)) {
+			continue;
+		}
 		int buildLevel = 0;
-		int timesApplied = 0;
-		if (!(pls >> code >> kind >> ownerName >> pst >> fmult >> fdur >> buildLevel >> timesApplied)) {
-			if (!(pls >> code >> kind >> ownerName >> pst >> fmult >> fdur >> buildLevel)) {
-				continue;
-			}
-			timesApplied = 1;
+		if (buildStr == "H") {
+			buildLevel = 5;
+		} else if (!buildStr.empty() && buildStr != "-") {
+			try { buildLevel = std::stoi(buildStr); } catch (...) { buildLevel = 0; }
 		}
 
 		PropertyTile* prop = board.getPropertyByCode(toUpper(code));
-		if (!prop) continue;
+		if (!prop) {
+			continue;
+		}
 
 		Player* owner = nullptr;
 		if (ownerName != "BANK" && ownerName != "-") {
@@ -560,11 +515,39 @@ bool TextFileRepository::loadInto(GameState& state, Board& board, TransactionLog
 		}
 
 		if (fmult > 1 && fdur > 0 && owner) {
-			festivals.restoreEffect(prop, owner, fmult, fdur, std::max(1, timesApplied));
+			festivals.restoreEffect(prop, owner, fmult, fdur, timesAppliedFromFmult(fmult));
 		}
 	}
 
 	board.updateMonopolies();
+
+	std::string deckCountLine;
+	if (!std::getline(in, deckCountLine)) {
+		logger.clear();
+		return true;
+	}
+	int nDeckCards = 0;
+	{
+		std::istringstream ds(deckCountLine);
+		if (!(ds >> nDeckCards)) {
+			logger.clear();
+			return true;
+		}
+	}
+	cardSystem.getSkillDeck().clear();
+	for (int i = 0; i < nDeckCards; ++i) {
+		std::string cardName;
+		if (!std::getline(in, cardName)) {
+			break;
+		}
+		while (!cardName.empty() && (cardName.back() == '\r' || cardName.back() == ' ')) {
+			cardName.pop_back();
+		}
+		auto card = makeDefaultSkillCard(cardName);
+		if (card) {
+			cardSystem.getSkillDeck().addCard(std::move(card));
+		}
+	}
 
 	std::string logCountLine;
 	if (!std::getline(in, logCountLine)) {
@@ -587,155 +570,19 @@ bool TextFileRepository::loadInto(GameState& state, Board& board, TransactionLog
 		if (!std::getline(in, logLine)) {
 			break;
 		}
-		const std::size_t p1 = logLine.find('|');
-		const std::size_t p2 = logLine.find('|', p1 == std::string::npos ? 0 : p1 + 1);
-		const std::size_t p3 = logLine.find('|', p2 == std::string::npos ? 0 : p2 + 1);
-		if (p1 == std::string::npos || p2 == std::string::npos || p3 == std::string::npos) {
+		std::istringstream ls(logLine);
+		LogEntry e;
+		std::string turnStr;
+		if (!(ls >> turnStr >> e.username >> e.actionType)) {
 			continue;
 		}
-		LogEntry e;
-		e.turn = std::stoi(logLine.substr(0, p1));
-		e.username = logLine.substr(p1 + 1, p2 - p1 - 1);
-		e.actionType = logLine.substr(p2 + 1, p3 - p2 - 1);
-		e.detail = logLine.substr(p3 + 1);
+		try { e.turn = std::stoi(turnStr); } catch (...) { continue; }
+		std::getline(ls, e.detail);
+		if (!e.detail.empty() && e.detail.front() == ' ') {
+			e.detail = e.detail.substr(1);
+		}
 		loaded.push_back(std::move(e));
 	}
 	logger.loadFromSave(loaded);
-
-	std::string marker;
-	while (std::getline(in, marker)) {
-		if (marker.empty()) {
-			continue;
-		}
-
-		if (marker == "<EFFECT_STATE>") {
-			std::string countLine;
-			if (!std::getline(in, countLine)) {
-				return true;
-			}
-			int effectCount = 0;
-			{
-				std::istringstream es(countLine);
-				if (!(es >> effectCount)) {
-					return true;
-				}
-			}
-			for (int i = 0; i < effectCount; ++i) {
-				std::string effectLine;
-				if (!std::getline(in, effectLine)) {
-					break;
-				}
-				const std::vector<std::string> parts = splitPipe(effectLine);
-				if (parts.size() < 4) {
-					continue;
-				}
-				const auto it = byName.find(parts[0]);
-				if (it == byName.end() || !it->second) {
-					continue;
-				}
-				Player* player = it->second;
-				const std::string effectType = toUpper(parts[1]);
-				const int value = parseIntDefault(parts[2], 0);
-				const int turns = std::max(1, parseIntDefault(parts[3], 1));
-				if (effectType == "DISCOUNT") {
-					player->addEffect(new DiscountEffect(value, turns));
-				} else if (effectType == "SHIELD") {
-					player->addEffect(new ShieldEffect(turns));
-				}
-			}
-			continue;
-		}
-
-		if (marker == "<DECK_STATE>") {
-			cardSystem.getChanceDeck().clear();
-			cardSystem.getCommunityChestDeck().clear();
-			cardSystem.getSkillDeck().clear();
-
-			std::vector<CardDeck<ChanceCard>::CardPtr> chanceDraw;
-			std::vector<CardDeck<ChanceCard>::CardPtr> chanceUsed;
-			std::vector<CardDeck<CommunityChestCard>::CardPtr> communityDraw;
-			std::vector<CardDeck<CommunityChestCard>::CardPtr> communityUsed;
-			std::vector<CardDeck<SkillCard>::CardPtr> skillDraw;
-			std::vector<CardDeck<SkillCard>::CardPtr> skillUsed;
-
-			try {
-				std::string line;
-				if (!std::getline(in, line)) break;
-				const int chanceDrawCount = readTaggedCount(line, "CHANCE_DRAW");
-				for (int i = 0; i < chanceDrawCount; ++i) {
-					std::string idLine;
-					if (!std::getline(in, idLine)) break;
-					if (auto card = makeChanceCard(idLine)) {
-						chanceDraw.push_back(std::move(card));
-					}
-				}
-
-				if (!std::getline(in, line)) break;
-				const int chanceUsedCount = readTaggedCount(line, "CHANCE_USED");
-				for (int i = 0; i < chanceUsedCount; ++i) {
-					std::string idLine;
-					if (!std::getline(in, idLine)) break;
-					if (auto card = makeChanceCard(idLine)) {
-						chanceUsed.push_back(std::move(card));
-					}
-				}
-
-				if (!std::getline(in, line)) break;
-				const int communityDrawCount = readTaggedCount(line, "COMMUNITY_DRAW");
-				for (int i = 0; i < communityDrawCount; ++i) {
-					std::string idLine;
-					if (!std::getline(in, idLine)) break;
-					if (auto card = makeCommunityCard(idLine)) {
-						communityDraw.push_back(std::move(card));
-					}
-				}
-
-				if (!std::getline(in, line)) break;
-				const int communityUsedCount = readTaggedCount(line, "COMMUNITY_USED");
-				for (int i = 0; i < communityUsedCount; ++i) {
-					std::string idLine;
-					if (!std::getline(in, idLine)) break;
-					if (auto card = makeCommunityCard(idLine)) {
-						communityUsed.push_back(std::move(card));
-					}
-				}
-
-				if (!std::getline(in, line)) break;
-				const int skillDrawCount = readTaggedCount(line, "SKILL_DRAW");
-				for (int i = 0; i < skillDrawCount; ++i) {
-					std::string idLine;
-					if (!std::getline(in, idLine)) break;
-					const std::vector<std::string> parts = splitPipe(idLine);
-					if (parts.size() < 3) continue;
-					if (auto card = makeSkillCardById(parts[0], parts[1], parts[2])) {
-						skillDraw.push_back(std::move(card));
-					}
-				}
-
-				if (!std::getline(in, line)) break;
-				const int skillUsedCount = readTaggedCount(line, "SKILL_USED");
-				for (int i = 0; i < skillUsedCount; ++i) {
-					std::string idLine;
-					if (!std::getline(in, idLine)) break;
-					const std::vector<std::string> parts = splitPipe(idLine);
-					if (parts.size() < 3) continue;
-					if (auto card = makeSkillCardById(parts[0], parts[1], parts[2])) {
-						skillUsed.push_back(std::move(card));
-					}
-				}
-			} catch (const std::exception&) {
-				cardSystem.initializeDecks();
-				continue;
-			}
-
-			cardSystem.getChanceDeck().setDrawCards(std::move(chanceDraw));
-			cardSystem.getChanceDeck().setUsedCards(std::move(chanceUsed));
-			cardSystem.getCommunityChestDeck().setDrawCards(std::move(communityDraw));
-			cardSystem.getCommunityChestDeck().setUsedCards(std::move(communityUsed));
-			cardSystem.getSkillDeck().setDrawCards(std::move(skillDraw));
-			cardSystem.getSkillDeck().setUsedCards(std::move(skillUsed));
-		}
-	}
-
 	return true;
 }

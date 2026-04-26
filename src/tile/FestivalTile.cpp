@@ -24,15 +24,22 @@ void FestivalTile::onLand(Player& player, GameContext& ctx, int /*diceTotal*/) {
 		return;
 	}
 
-	std::string code;
-	if (PlayerController* controller = player.getController()) {
-		code = controller->decideFestivalProperty(owned);
-	}
-	PropertyTile* property = ctx.board.getPropertyByCode(normalizeCode(code));
-	if (!property || property->getOwner() != &player) {
-		ctx.logger.log(ctx.currentTurn, player.getUsername(), "FESTIVAL",
-			"Pilihan properti tidak valid. Pilih properti yang dimiliki.");
-		return;
+	PropertyTile* property = nullptr;
+	PlayerController* controller = player.getController();
+	while (true) {
+		std::string code;
+		if (controller) {
+			code = controller->decideFestivalProperty(owned);
+		}
+		if (code.empty()) {
+			return;
+		}
+		PropertyTile* candidate = ctx.board.getPropertyByCode(normalizeCode(code));
+		if (candidate && candidate->getOwner() == &player && !candidate->isMortgaged()) {
+			property = candidate;
+			break;
+		}
+		std::cout << "Pilihan properti tidak valid. Pilih properti yang kamu miliki.\n";
 	}
 	FestivalResult result = ctx.festivalManager.applyFestival(player, *property);
 	ctx.logger.log(ctx.currentTurn, player.getUsername(), "FESTIVAL",

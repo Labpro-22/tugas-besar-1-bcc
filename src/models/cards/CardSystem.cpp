@@ -309,12 +309,8 @@ void CardSystem::initializeDecks() {
 CardSystem::UseOutcome CardSystem::useSkillCard(Player& player, int cardIndex, GameContext& context,
                                                 bool hasRolledDice, bool extraRollAvailable, bool hasUsedSkillCard) {
     UseOutcome outcome;
-    if (hasRolledDice) {
+    if (hasRolledDice && !extraRollAvailable) {
         std::cout << "Kartu kemampuan hanya bisa digunakan sebelum lempar dadu.\n";
-        return outcome;
-    }
-    if (extraRollAvailable) {
-        std::cout << "Bonus lempar harus diselesaikan dulu sebelum pakai kartu kemampuan.\n";
         return outcome;
     }
     if (hasUsedSkillCard) {

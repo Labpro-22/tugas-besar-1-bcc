@@ -1,6 +1,5 @@
 #include "core/FestivalManager.hpp"
 #include "models/Player.hpp"
-#include "models/effects/FestivalEffect.hpp"
 
 FestivalResult::FestivalResult(bool applied, int multiplier, int turnsGranted)
     : applied(applied), multiplier(multiplier), turnsGranted(turnsGranted) {}
@@ -71,14 +70,13 @@ FestivalResult FestivalManager::applyFestival(Player& player, PropertyTile& prop
         FestivalPropertyEffect& fe = it->second;
 
         if (fe.getTimesApplied() >= 3) {
-            return FestivalResult(false, fe.getMultiplier(), fe.getTurnsRemaining());
+            fe.setTurnsRemaining(3);
+            return FestivalResult(true, fe.getMultiplier(), 3);
         }
 
         fe.setTimesApplied(fe.getTimesApplied() + 1);
         fe.setMultiplier(multiplierFor(fe.getTimesApplied()));
         fe.setTurnsRemaining(3);
-
-        player.addEffect(new FestivalRentEffect(fe.getMultiplier(), 3));
 
         return FestivalResult(true, fe.getMultiplier(), 3);
     }
@@ -89,8 +87,6 @@ FestivalResult FestivalManager::applyFestival(Player& player, PropertyTile& prop
     fe.setMultiplier(multiplierFor(1));
     fe.setTurnsRemaining(3);
     activeEffects[&property] = fe;
-
-    player.addEffect(new FestivalRentEffect(fe.getMultiplier(), 3));
 
     return FestivalResult(true, fe.getMultiplier(), 3);
 }
@@ -146,7 +142,6 @@ void FestivalManager::restoreEffect(PropertyTile* prop, Player* owner, int mult,
     fe.setTurnsRemaining(turnsRemaining);
     fe.setTimesApplied(timesApplied);
     activeEffects[prop] = fe;
-    owner->addEffect(new FestivalRentEffect(mult, turnsRemaining));
 }
 
 void FestivalManager::clearAllEffects() {

@@ -59,11 +59,18 @@ int HumanController::decideLiquidation(const LiquidationState& state) {
 }
 
 int HumanController::decideDropCard(const vector<CardInfo>& cards) {
+    if (view_) {
+        view_->showDropCardPrompt(cards);
+    }
     return input->getSkillCardChoice(cards);
 }
 
 bool HumanController::decideJailPay() {
     return input->getYesNo("Bayar denda penjara? (y/n)");
+}
+
+bool HumanController::confirmAction(const std::string& prompt) {
+    return input->getYesNo(prompt);
 }
 
 string HumanController::decideTeleportTarget() {

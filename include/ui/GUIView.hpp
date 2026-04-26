@@ -124,6 +124,7 @@ private:
     std::string saveLoadStatus_;
     int saveLoadStatusFrames_{0};
     std::string propertyPanelOwner_;
+    std::string lastCurrentPlayerName_;
     std::chrono::steady_clock::time_point gameStartedAt_{};
     bool gameTimerRunning_{false};
     int inspectedTileIndex_{-1};

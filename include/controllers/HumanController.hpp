@@ -23,6 +23,7 @@ public:
     int decideDropCard(const vector<CardInfo>& cards) override;
 
     bool decideJailPay() override;
+    bool confirmAction(const std::string& prompt) override;
     string decideTeleportTarget() override;
     string decideLassoTarget(const vector<string>& players) override;
     string decideDemolitionTarget(const vector<PropertyInfo>& properties) override;

@@ -9,6 +9,7 @@
 #include "utils/Types.hpp"
 #include "controllers/PlayerController.hpp"
 #include "core/Bank.hpp"
+#include "core/FestivalManager.hpp"
 #include "core/log/header/TransactionLogger.hpp"
 #include "manager/header/AuctionManager.hpp"
 #include "manager/header/BankruptcyManager.hpp"
@@ -130,6 +131,10 @@ void PropertyTile::onLand(Player& player, GameContext& ctx, int diceTotal) {
 
 	Player* owner = getOwner();
 	Money rent = getRent(diceTotal);
+	const int festivalMult = ctx.festivalManager.getMultiplier(this);
+	if (festivalMult > 1) {
+		rent = Money(rent.getAmount() * festivalMult);
+	}
 	rent = owner->applyIncomingModifiers(rent, this);
 	if (!player.canAfford(player.applyOutgoingModifiers(rent))) {
 		std::cout << player.getUsername() << " tidak mampu membayar sewa " << rent.toString() << ".\n";

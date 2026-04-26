@@ -171,7 +171,14 @@ namespace {
 		info.players = standing;
 		info.winCondition = winCondition;
 		if (!standing.empty()) {
-			info.winners.push_back(standing.front().username);
+			const PlayerSummary& top = standing.front();
+			for (const PlayerSummary& s : standing) {
+				if (s.money == top.money && s.propertyCount == top.propertyCount && s.cardCount == top.cardCount) {
+					info.winners.push_back(s.username);
+				} else {
+					break;
+				}
+			}
 		}
 		return info;
 	}
@@ -380,7 +387,7 @@ void GameEngine::runGameLoop() {
 	}
 
 	while (running) {
-		if (gameState.getMaxTurn() > 0 && gameState.getCurrentTurn() > gameState.getMaxTurn()) {
+		if (isGameOver()) {
 			stop();
 			break;
 		}
@@ -416,7 +423,18 @@ const CommandRegistry& GameEngine::getCommandRegistry() const {
 
 bool GameEngine::isGameOver() const {
 	const std::vector<PlayerSummary> standing = buildPlayerSummaries(gameState.getPlayers());
-	return standing.size() <= 1 || (gameState.getMaxTurn() > 0 && gameState.getCurrentTurn() > gameState.getMaxTurn());
+	if (standing.size() <= 1) {
+		return true;
+	}
+	if (gameState.getMaxTurn() > 0) {
+		for (const Player* p : gameState.getPlayers()) {
+			if (p && !p->isBankrupt() && p->getTurnCount() < gameState.getMaxTurn()) {
+				return false;
+			}
+		}
+		return true;
+	}
+	return false;
 }
 
 std::string GameEngine::getGameOverReason() const {
@@ -424,7 +442,12 @@ std::string GameEngine::getGameOverReason() const {
 	if (standing.size() <= 1) {
 		return "Pemain terakhir yang tersisa";
 	}
-	if (gameState.getMaxTurn() > 0 && gameState.getCurrentTurn() > gameState.getMaxTurn()) {
+	if (gameState.getMaxTurn() > 0) {
+		for (const Player* p : gameState.getPlayers()) {
+			if (p && !p->isBankrupt() && p->getTurnCount() < gameState.getMaxTurn()) {
+				return "";
+			}
+		}
 		return "Batas giliran tercapai";
 	}
 	return "";
@@ -615,7 +638,7 @@ bool GameEngine::processCommand(const std::string& input, Player& player) {
 			return true;
 		}
 
-		if (command == "lempar" || command == "roll_dice") {
+		if (command == "lempar" || command == "lempar_dadu" || command == "roll_dice") {
 			std::string maybeDadu;
 			stream >> maybeDadu;
 			if (gameState.getExtraRollAvailable()) {
@@ -626,21 +649,36 @@ bool GameEngine::processCommand(const std::string& input, Player& player) {
 			return true;
 		}
 
-		if (command == "atur") {
-			std::string dadu;
+		if (command == "atur" || command == "atur_dadu") {
 			int d1 = 0;
 			int d2 = 0;
-			stream >> dadu >> d1 >> d2;
+			if (command == "atur") {
+				std::string dadu;
+				stream >> dadu >> d1 >> d2;
+			} else {
+				stream >> d1 >> d2;
+			}
 			dice.setManual(d1, d2);
 			transactionLogger.log(gameState.getCurrentTurn(),
 				player.getUsername(),
 				"ATUR_DADU",
-				"Roll berikutnya: " + std::to_string(d1) + "+" + std::to_string(d2));
+				"Atur dadu: " + std::to_string(d1) + "+" + std::to_string(d2));
+			if (gameState.getExtraRollAvailable()) {
+				player.setHasUsedSkillCardThisTurn(false);
+				gameState.setHasUsedSkillCard(false);
+			}
+			rollDice(player);
 			return true;
 		}
 
-		if (command == "cetak" || command == "print") {
+		if (command == "cetak" || command == "cetak_log" || command == "print") {
 			std::string what;
+			if (command == "cetak_log") {
+				int n = 0;
+				stream >> n;
+				printLog(n);
+				return true;
+			}
 			stream >> what;
 			what = lower(what);
 			if (what == "papan" || what == "board") {
@@ -680,10 +718,10 @@ bool GameEngine::processCommand(const std::string& input, Player& player) {
 			return true;
 		}
 
-		if (command == "gunakan" || command == "use_skill") {
+		if (command == "gunakan" || command == "gunakan_kemampuan" || command == "use_skill") {
 			std::string maybeKemampuan;
 			int index = 0;
-			if (command == "gunakan") {
+			if (command == "gunakan" || command == "gunakan_kemampuan") {
 				stream >> maybeKemampuan >> index;
 			} else {
 				stream >> index;
@@ -801,6 +839,7 @@ void GameEngine::endTurn(Player& player) {
 	}
 
 	eventBus.publish(TurnEndedEvent(gameState.getCurrentTurn(), player.getUsername(), "Turn ended"));
+	player.incrementTurnCount();
 	player.resetTurnFlags();
 	gameState.resetTurnFlags();
 	turnManager.nextTurn();
@@ -923,21 +962,44 @@ void GameEngine::mortgageProperty(Player& player, const std::string& code) {
 	}
 	if (auto* street = dynamic_cast<StreetTile*>(property)) {
 		ColorGroup* group = board.getColorGroup(street->getColor());
+		bool hasBuildingsInGroup = false;
 		if (group) {
-			bool soldBuildings = false;
-			for (StreetTile* member : group->getStreets()) {
-				while (member && member->getBuildingLevel() > 0) {
-					const Money refund(member->getBuildingSaleRefund());
-					member->demolish();
-					bank.payPlayer(player, refund, "Jual bangunan sebelum gadai");
-					transactionLogger.log(gameState.getCurrentTurn(), player.getUsername(), "LIKUIDASI",
-						"Jual bangunan " + member->getLabel() + " " + refund.toString());
-					soldBuildings = true;
+			for (const StreetTile* member : group->getStreets()) {
+				if (member && member->getBuildingLevel() > 0) {
+					hasBuildingsInGroup = true;
+					break;
 				}
 			}
-			if (soldBuildings) {
-				board.updateMonopolies();
+		}
+		if (hasBuildingsInGroup) {
+			PlayerController* ctrl = player.getController();
+			if (ctrl && !ctrl->confirmAction("Jual semua bangunan di color group ini? (y/n)")) {
+				std::cout << "Gadai dibatalkan.\n";
+				return;
 			}
+			bool soldBuildings = false;
+			if (group) {
+				for (StreetTile* member : group->getStreets()) {
+					while (member && member->getBuildingLevel() > 0) {
+						const Money refund(member->getBuildingSaleRefund());
+						member->demolish();
+						bank.payPlayer(player, refund, "Jual bangunan sebelum gadai");
+						transactionLogger.log(gameState.getCurrentTurn(), player.getUsername(), "LIKUIDASI",
+							"Jual bangunan " + member->getLabel() + " " + refund.toString());
+						soldBuildings = true;
+					}
+				}
+				if (soldBuildings) {
+					board.updateMonopolies();
+				}
+			}
+		}
+	}
+	{
+		PlayerController* ctrl = player.getController();
+		if (ctrl && !ctrl->confirmAction("Lanjut menggadaikan " + property->getLabel() + "? (y/n)")) {
+			std::cout << "Gadai dibatalkan.\n";
+			return;
 		}
 	}
 	property->setStatus(PropertyStatus::MORTGAGED);

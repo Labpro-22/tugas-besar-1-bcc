@@ -495,8 +495,8 @@ void GUIView::showBoard(const GameStateView& state) {
         if (tile.type == TileType::RAILROAD && !tile.rentLevels.empty()) {
             lines.push_back({"", 8.f, TEXT_MUTED, 0.f});
             lines.push_back({"Tabel Sewa (jumlah stasiun dimiliki):", 17.f, TEXT_PRIMARY, 0.f});
-            for (size_t r = 0; r < tile.rentLevels.size(); ++r) {
-                lines.push_back({std::to_string(r + 1) + " stasiun: M" + std::to_string(tile.rentLevels[r]), 16.f, TEXT_MUTED, 14.f});
+            for (size_t r = 1; r < tile.rentLevels.size(); ++r) {
+                lines.push_back({std::to_string(r) + " stasiun: M" + std::to_string(tile.rentLevels[r]), 16.f, TEXT_MUTED, 14.f});
             }
         }
 
@@ -513,8 +513,8 @@ void GUIView::showBoard(const GameStateView& state) {
                         ++railroadCount;
                     }
                 }
-                if (railroadCount > 0 && railroadCount <= static_cast<int>(tile.rentLevels.size())) {
-                    currentRent = tile.rentLevels[railroadCount - 1];
+                if (railroadCount > 0 && railroadCount < static_cast<int>(tile.rentLevels.size())) {
+                    currentRent = tile.rentLevels[railroadCount];
                 }
             }
 
@@ -588,9 +588,10 @@ void GUIView::drawLeftPanel(const GameStateView& state, Rectangle summaryRect, R
     gui::draw::drawPanel(summaryRect, SURFACE_BG, PANEL_BORDER);
     {
         const float midY = summaryRect.y + summaryRect.height * 0.5f;
-        const std::string roundText = "Ronde " + std::to_string(state.currentTurn) + " / " + std::to_string(state.maxTurn);
+        const std::string roundText = "Turn " + std::to_string(state.currentTurn);
         DrawTextEx(am.font("bold"), roundText.c_str(), Vector2{summaryRect.x + 14.f, midY - 14.f}, 19.f, 0.f, TEXT_PRIMARY);
-        DrawTextEx(am.font("regular"), "putaran", Vector2{summaryRect.x + 14.f, midY + 7.f}, 13.f, 0.f, TEXT_MUTED);
+        const std::string limitText = "Batas / pemain: " + std::to_string(state.maxTurn);
+        DrawTextEx(am.font("regular"), limitText.c_str(), Vector2{summaryRect.x + 14.f, midY + 7.f}, 13.f, 0.f, TEXT_MUTED);
         const std::string clockStr = formattedElapsedTime();
         const Vector2 clockMeasure = MeasureTextEx(am.font("bold"), clockStr.c_str(), 22.f, 0.f);
         DrawTextEx(am.font("bold"), clockStr.c_str(),
@@ -1106,7 +1107,7 @@ void GUIView::drawRightPanel(const GameStateView& state, Rectangle logRect, Rect
                              actionLayout.diceRect.height * 0.30f,
                          });
 
-        const bool setDiceDisabled = state.hasRolledDice || state.extraRollAvailable || activeJailed;
+        const bool setDiceDisabled = state.hasRolledDice || activeJailed;
         gui::draw::drawPanel(actionLayout.setDiceRect,
                              setDiceDisabled ? gui::menu::makeColor(0x11, 0x16, 0x22)
                                              : gui::menu::makeColor(0x16, 0x22, 0x34),
@@ -1127,7 +1128,9 @@ void GUIView::drawRightPanel(const GameStateView& state, Rectangle logRect, Rect
         DrawTextEx(am.font("regular"),
                    activeJailed
                        ? "Saat di penjara, fokus pada percobaan keluar. Atur dadu dimatikan untuk state ini."
-                       : "Bangun, gadai, tebus, simpan, atau buka kartu dari panel ini.",
+                       : (state.extraRollAvailable
+                           ? "Bonus roll aktif. Kamu masih bisa atur dadu sebelum lempar lagi."
+                           : "Bangun, gadai, tebus, simpan, atau buka kartu dari panel ini."),
                    Vector2{actionsRect.x + 14.f, actionLayout.tipY},
                    13.f, 0.f, TEXT_MUTED);
     }
@@ -1151,8 +1154,15 @@ void GUIView::drawPropertyPanel(const GameStateView& state, Rectangle rect) {
         return false;
     };
 
+    if (state.currentPlayerName != lastCurrentPlayerName_) {
+        propertyPanelOwner_ = state.currentPlayerName;
+        propertyPanelScrollPx_ = 0;
+        lastCurrentPlayerName_ = state.currentPlayerName;
+    }
+
     if (propertyPanelOwner_.empty() || !hasPlayer(propertyPanelOwner_)) {
         propertyPanelOwner_ = state.currentPlayerName;
+        propertyPanelScrollPx_ = 0;
     }
 
     const std::string ownerName = propertyPanelOwner_.empty()
@@ -1510,7 +1520,7 @@ void GUIView::handleInGameClick(float mx, float my, std::string& outCommand, con
     const ActionLayout actionLayout = makeActionLayout(layout.actionsPanel);
     const PlayerView* activePlayer = activePlayerView(state);
     const bool activeJailed = activePlayer && activePlayer->status == PlayerStatus::JAILED;
-    const bool setDiceDisabled = state.hasRolledDice || state.extraRollAvailable || activeJailed;
+    const bool setDiceDisabled = state.hasRolledDice || activeJailed;
 
     for (size_t i = 0; i < ACTION_LABELS.size(); ++i) {
         if (CheckCollisionPointRec(Vector2{mx, my}, actionLayout.buttons[i])) {
@@ -1564,6 +1574,7 @@ void GUIView::handleInGameClick(float mx, float my, std::string& outCommand, con
         const Rectangle row{playersBody.x, y, playersBody.width, rowH};
         if (CheckCollisionPointRec(Vector2{mx, my}, row)) {
             propertyPanelOwner_ = state.players[i].username;
+            propertyPanelScrollPx_ = 0;
             return;
         }
         y += rowH + rowGap;

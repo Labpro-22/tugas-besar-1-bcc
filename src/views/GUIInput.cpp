@@ -290,8 +290,11 @@ int GUIInput::getSkillCardChoice(const vector<CardInfo>& cards) {
         options.push_back(card.description.empty() ? "-" : card.description);
     }
 
+    const bool discardOverflowCard = cards.size() > 3;
     activatePrompt(GUIPromptType::SKILL_CARD,
-                   "Pilih kartu (0 = batal)",
+                   discardOverflowCard
+                       ? "Pilih kartu yang dibuang (0 = buang kartu baru)"
+                       : "Pilih kartu (0 = batal)",
                    0,
                    static_cast<int>(cards.size()),
                    options);

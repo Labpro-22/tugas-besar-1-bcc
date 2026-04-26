@@ -130,7 +130,8 @@ void GUIView::showSaveLoadStatus(const string& message) {
 }
 
 void GUIView::showTurnInfo(const string& playerName, int turnNum, int maxTurn) {
-    showSaveLoadStatus("Giliran " + std::to_string(turnNum) + "/" + std::to_string(maxTurn) +
+    showSaveLoadStatus("Turn global " + std::to_string(turnNum) +
+                       " | batas per pemain " + std::to_string(maxTurn) +
                        " - " + playerName);
 }
 

@@ -77,7 +77,7 @@ bool AuctionManager::runAuction(PropertyTile& property, Player& trigger,
 		if (decision.action == AuctionAction::BID) {
 			int bid = decision.bidAmount;
 			if (bid <= highestBid) {
-				bid = std::max(1, highestBid + 1);
+				bid = std::max(0, highestBid + 1);
 			}
 			if (bid > highestBid && bidder->canAfford(Money(bid))) {
 				highestBid = bid;
@@ -90,7 +90,7 @@ bool AuctionManager::runAuction(PropertyTile& property, Player& trigger,
 		}
 
 		if (!winner && passCount + 1 >= activeParticipants) {
-			const int forcedBid = std::max(1, highestBid + 1);
+			const int forcedBid = std::max(0, highestBid + 1);
 			if (bidder->canAfford(Money(forcedBid))) {
 				highestBid = forcedBid;
 				winner = bidder;

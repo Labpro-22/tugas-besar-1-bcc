@@ -26,6 +26,7 @@ public:
     virtual int decideDropCard(const vector<CardInfo>& cards) = 0;
 
     virtual bool decideJailPay() = 0;
+    virtual bool confirmAction(const std::string& prompt) { return true; }
 
     virtual string decideTeleportTarget() = 0;
     virtual string decideLassoTarget(const vector<string>& players) = 0;
