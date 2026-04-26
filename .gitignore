@@ -52,8 +52,3 @@ bin/
 *.log
 *.tmp
 *.bak
-*.pdf
-
-# Docs / Specs (should not be committed)
-*.pdf
-OOPClassDesign.md
