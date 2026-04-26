@@ -101,6 +101,12 @@ private:
     GUIPromptType promptOptionScrollType_{GUIPromptType::NONE};
     int promptOptionScrollCount_{0};
     std::string promptOptionScrollLabel_;
+#if NIMONSPOLY_ENABLE_RAYLIB
+    std::vector<std::vector<std::string>> promptOptionWrapped_;
+    std::vector<RaylibColor> promptOptionColors_;
+    std::vector<float> promptOptionHeights_;
+    float promptOptionTotalHeight_{0.f};
+#endif
 
     bool diceAnimating_{false};
     float diceAnimElapsed_{0.f};
@@ -120,6 +126,9 @@ private:
     std::string propertyPanelOwner_;
     std::chrono::steady_clock::time_point gameStartedAt_{};
     bool gameTimerRunning_{false};
+    int inspectedTileIndex_{-1};
+    int tileOverlayScrollPx_{0};
+    int propertyPanelScrollPx_{0};
 
     bool handleLandingInput();
     bool handlePlayerCountInput();

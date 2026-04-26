@@ -2,6 +2,7 @@
 
 #include "core/state/header/GameStateView.hpp"
 #include "ui/AssetManager.hpp"
+#include "utils/GameUtils.hpp"
 
 #if NIMONSPOLY_ENABLE_RAYLIB
 #include <algorithm>
@@ -404,6 +405,176 @@ void GUIView::showBoard(const GameStateView& state) {
         buyPromptActive_ = false;
     }
 
+    if (inspectedTileIndex_ >= 0 && inspectedTileIndex_ < static_cast<int>(state.tiles.size())) {
+        const TileData& tile = state.tiles[static_cast<size_t>(inspectedTileIndex_)];
+
+        DrawRectangleRec(Rectangle{0.f, 0.f, W, H}, gui::menu::makeColor(0, 0, 0, 180));
+
+        const float panelW = std::min(W * 0.75f, 860.f);
+        const float panelH = std::min(H * 0.62f, 540.f);
+        const Rectangle panel = gui::draw::centeredRect(W * 0.5f, H * 0.5f, panelW, panelH);
+        gui::draw::drawPanel(panel, gui::menu::makeColor(0x0e, 0x14, 0x1e, 245), gui::menu::makeColor(0x5c, 0xd6, 0xff, 90));
+
+        const float padding = 22.f;
+        const float tileW = panelH * 0.50f;
+        const float tileH = panelH * 0.78f;
+        const Rectangle tileRect{
+            panel.x + padding,
+            panel.y + (panelH - tileH) * 0.5f,
+            tileW,
+            tileH,
+        };
+        gui::tile::drawTile(tile, tileRect, gui::tile::BoardSide::BOTTOM);
+
+        const float textX = tileRect.x + tileRect.width + padding + 10.f;
+        const float textW = panel.x + panelW - textX - padding;
+        const float textTop = panel.y + padding;
+        const float textBottom = panel.y + panelH - padding - 24.f;
+        const float textHeight = std::max(0.f, textBottom - textTop);
+
+        struct TextLine {
+            std::string text;
+            float size;
+            RaylibColor color;
+            float indent;
+        };
+        std::vector<TextLine> lines;
+        lines.reserve(24);
+
+        lines.push_back({tile.name, 28.f, ACCENT_GOLD, 0.f});
+        lines.push_back({"Kode: " + tile.code, 17.f, TEXT_MUTED, 0.f});
+
+        std::string typeLabel;
+        switch (tile.type) {
+            case TileType::STREET: typeLabel = "Street"; break;
+            case TileType::RAILROAD: typeLabel = "Railroad"; break;
+            case TileType::UTILITY: typeLabel = "Utility"; break;
+            case TileType::GO: typeLabel = "Start"; break;
+            case TileType::JAIL: typeLabel = "Penjara"; break;
+            case TileType::GO_TO_JAIL: typeLabel = "Masuk Penjara"; break;
+            case TileType::CHANCE: typeLabel = "Kesempatan"; break;
+            case TileType::COMMUNITY_CHEST: typeLabel = "Dana Umum"; break;
+            case TileType::TAX_PPH: typeLabel = "Pajak PPH"; break;
+            case TileType::TAX_PBM: typeLabel = "Pajak PBM"; break;
+            case TileType::FESTIVAL: typeLabel = "Festival"; break;
+            case TileType::FREE_PARKING: typeLabel = "Parkir Gratis"; break;
+            default: typeLabel = "Lainnya"; break;
+        }
+        lines.push_back({"Jenis: " + typeLabel, 17.f, TEXT_PRIMARY, 0.f});
+
+        if (tile.type == TileType::STREET) {
+            lines.push_back({"Warna: " + colorName(tile.color), 17.f, TEXT_PRIMARY, 0.f});
+        }
+
+        if (tile.isOwnable) {
+            lines.push_back({"Harga: M" + std::to_string(tile.price), 17.f, TEXT_GREEN, 0.f});
+            lines.push_back({"Gadai: M" + std::to_string(tile.mortgageValue), 17.f, TEXT_PRIMARY, 0.f});
+            if (!tile.ownerName.empty()) {
+                lines.push_back({"Pemilik: " + tile.ownerName, 17.f, ACCENT_CYAN, 0.f});
+            }
+            if (tile.isMortgaged) {
+                lines.push_back({"STATUS: GADAI", 17.f, gui::menu::makeColor(0xff, 0x4d, 0x4d), 0.f});
+            }
+        }
+
+        if (tile.type == TileType::STREET && !tile.rentLevels.empty()) {
+            lines.push_back({"", 8.f, TEXT_MUTED, 0.f});
+            lines.push_back({"Tabel Sewa:", 17.f, TEXT_PRIMARY, 0.f});
+            for (size_t r = 0; r < tile.rentLevels.size() && r < 6; ++r) {
+                std::string levelLabel;
+                if (r == 0) levelLabel = "Tanpa bangunan";
+                else if (r == 5) levelLabel = "Hotel";
+                else levelLabel = std::to_string(r) + " rumah";
+                lines.push_back({levelLabel + ": M" + std::to_string(tile.rentLevels[r]), 16.f, TEXT_MUTED, 14.f});
+            }
+            lines.push_back({"", 4.f, TEXT_MUTED, 0.f});
+            lines.push_back({"Rumah: M" + std::to_string(tile.houseCost), 16.f, TEXT_PRIMARY, 0.f});
+            lines.push_back({"Hotel: M" + std::to_string(tile.hotelCost), 16.f, TEXT_PRIMARY, 0.f});
+        }
+
+        if (tile.type == TileType::RAILROAD && !tile.rentLevels.empty()) {
+            lines.push_back({"", 8.f, TEXT_MUTED, 0.f});
+            lines.push_back({"Tabel Sewa (jumlah stasiun dimiliki):", 17.f, TEXT_PRIMARY, 0.f});
+            for (size_t r = 0; r < tile.rentLevels.size(); ++r) {
+                lines.push_back({std::to_string(r + 1) + " stasiun: M" + std::to_string(tile.rentLevels[r]), 16.f, TEXT_MUTED, 14.f});
+            }
+        }
+
+        if (tile.isOwnable && !tile.ownerName.empty() && !tile.isMortgaged) {
+            lines.push_back({"", 8.f, TEXT_MUTED, 0.f});
+            int currentRent = 0;
+            if (tile.type == TileType::STREET && tile.buildingLevel >= 0 &&
+                tile.buildingLevel < static_cast<int>(tile.rentLevels.size())) {
+                currentRent = tile.rentLevels[tile.buildingLevel];
+            } else if (tile.type == TileType::RAILROAD && !tile.rentLevels.empty()) {
+                int railroadCount = 0;
+                for (const auto& p : state.properties) {
+                    if (p.ownerName == tile.ownerName && p.type == TileType::RAILROAD) {
+                        ++railroadCount;
+                    }
+                }
+                if (railroadCount > 0 && railroadCount <= static_cast<int>(tile.rentLevels.size())) {
+                    currentRent = tile.rentLevels[railroadCount - 1];
+                }
+            }
+
+            if (tile.festivalTurnsRemaining > 0 && tile.festivalMultiplier > 1) {
+                currentRent *= tile.festivalMultiplier;
+                lines.push_back({"Sewa saat ini (Festival x" + std::to_string(tile.festivalMultiplier) + "): M" + std::to_string(currentRent), 18.f, ACCENT_GOLD, 0.f});
+            } else if (currentRent > 0) {
+                lines.push_back({"Sewa saat ini: M" + std::to_string(currentRent), 18.f, ACCENT_GOLD, 0.f});
+            } else if (tile.type == TileType::UTILITY) {
+                lines.push_back({"Sewa saat ini: 4x dadu (1 utilitas) atau 10x dadu (2 utilitas)", 16.f, ACCENT_GOLD, 0.f});
+            }
+        }
+
+        float totalContentH = 0.f;
+        for (const auto& line : lines) {
+            totalContentH += line.size + 6.f;
+        }
+        totalContentH += 8.f;
+
+        const int maxScroll = static_cast<int>(std::max(0.f, totalContentH - textHeight));
+        const Rectangle textRegion{textX, textTop, textW, textHeight};
+        if (CheckCollisionPointRec(GetMousePosition(), textRegion)) {
+            const float wheel = GetMouseWheelMove();
+            if (wheel != 0.f) {
+                tileOverlayScrollPx_ -= static_cast<int>(wheel * 36.f);
+            }
+        }
+        tileOverlayScrollPx_ = std::clamp(tileOverlayScrollPx_, 0, maxScroll);
+
+        BeginScissorMode(static_cast<int>(textRegion.x),
+                         static_cast<int>(textRegion.y),
+                         static_cast<int>(textRegion.width),
+                         static_cast<int>(textRegion.height));
+        float drawY = textTop - static_cast<float>(tileOverlayScrollPx_);
+        for (const auto& line : lines) {
+            if (line.text.empty()) {
+                drawY += line.size;
+                continue;
+            }
+            DrawTextEx(am.font(line.size >= 20.f ? "bold" : "regular"), line.text.c_str(),
+                       Vector2{textX + line.indent, drawY}, line.size, 0.f, line.color);
+            drawY += line.size + 6.f;
+        }
+        EndScissorMode();
+
+        if (maxScroll > 0) {
+            const float trackX = textX + textW - 5.f;
+            DrawRectangleRounded(Rectangle{trackX, textTop, 3.f, textHeight},
+                                 1.f, 2, gui::menu::makeColor(255, 255, 255, 24));
+            const float thumbH = std::max(24.f, textHeight * (textHeight / totalContentH));
+            const float travel = std::max(0.f, textHeight - thumbH);
+            const float t = (maxScroll == 0) ? 0.f : static_cast<float>(tileOverlayScrollPx_) / static_cast<float>(maxScroll);
+            DrawRectangleRounded(Rectangle{trackX, textTop + travel * t, 3.f, thumbH},
+                                 1.f, 2, gui::menu::makeColor(0x7d, 0xb4, 0xec, 220));
+        }
+
+        DrawTextEx(am.font("regular"), "Klik luar panel untuk tutup",
+                   Vector2{panel.x + panelW * 0.5f - 90.f, panel.y + panelH - 24.f}, 14.f, 0.f, TEXT_MUTED);
+    }
+
 #else
     (void)state;
 #endif
@@ -439,6 +610,10 @@ void GUIView::drawLeftPanel(const GameStateView& state, Rectangle summaryRect, R
         promptOptionScrollType_ = GUIPromptType::NONE;
         promptOptionScrollCount_ = 0;
         promptOptionScrollLabel_.clear();
+        promptOptionWrapped_.clear();
+        promptOptionColors_.clear();
+        promptOptionHeights_.clear();
+        promptOptionTotalHeight_ = 0.f;
     }
     drawPanelFrame(am, inputRect, "Pop Up", promptActive ? "aktif" : "standby", SURFACE_BG);
     {
@@ -583,7 +758,7 @@ void GUIView::drawLeftPanel(const GameStateView& state, Rectangle summaryRect, R
                        prompt.type == GUIPromptType::TAX_CHOICE ||
                        prompt.type == GUIPromptType::LIQUIDATION ||
                        prompt.type == GUIPromptType::SKILL_CARD) {
-                hint = "Input: angka sesuai pilihan";
+                hint = "Input: angka 1-N sesuai pilihan";
             } else if (prompt.type == GUIPromptType::DICE_MANUAL) {
                 hint = "Input: dua angka, misal 3 5. Esc untuk batal.";
             }
@@ -599,55 +774,59 @@ void GUIView::drawLeftPanel(const GameStateView& state, Rectangle summaryRect, R
                 cy += 17.f;
             }
 
-            if ((prompt.type == GUIPromptType::MENU_CHOICE ||
+              if ((prompt.type == GUIPromptType::MENU_CHOICE ||
+                  prompt.type == GUIPromptType::LIQUIDATION ||
                  prompt.type == GUIPromptType::SKILL_CARD) &&
                 !prompt.options.empty()) {
                 const float listTop = cy + 6.f;
                 const float listHeight = std::max(0.f, contentBottom - 18.f - listTop);
                 if (listHeight > 2.f) {
-                    std::vector<std::vector<std::string>> wrappedEntries;
-                    std::vector<RaylibColor> entryColors;
-                    std::vector<float> entryHeights;
-                    wrappedEntries.reserve(prompt.options.size());
-                    entryColors.reserve(prompt.options.size());
-                    entryHeights.reserve(prompt.options.size());
-
-                    float totalContentHeight = 0.f;
-                    for (int i = 0; i < static_cast<int>(prompt.options.size()); ++i) {
-                        std::string optionLine;
-                        RaylibColor optionColor = TEXT_PRIMARY;
-                        if (prompt.type == GUIPromptType::SKILL_CARD) {
-                            optionLine = prompt.options[static_cast<size_t>(i)];
-                            optionColor = (i % 2 == 0) ? TEXT_PRIMARY : TEXT_MUTED;
-                        } else {
-                            optionLine = std::to_string(i) + ". " + prompt.options[static_cast<size_t>(i)];
-                        }
-
-                        auto optionLines = gui::draw::wrapText(am, "regular", optionLine, 14.f, body.width - 14.f);
-                        if (optionLines.empty()) {
-                            optionLines.push_back(" ");
-                        }
-
-                        const float gapAfter =
-                            (prompt.type == GUIPromptType::SKILL_CARD && i % 2 == 1) ? 8.f : 4.f;
-                        const float entryHeight = static_cast<float>(optionLines.size()) * 16.f + gapAfter;
-                        wrappedEntries.push_back(std::move(optionLines));
-                        entryColors.push_back(optionColor);
-                        entryHeights.push_back(entryHeight);
-                        totalContentHeight += entryHeight;
-                    }
-
-                    if (promptOptionScrollType_ != prompt.type ||
+                    const bool promptChanged =
+                        promptOptionScrollType_ != prompt.type ||
                         promptOptionScrollCount_ != static_cast<int>(prompt.options.size()) ||
-                        promptOptionScrollLabel_ != prompt.label) {
+                        promptOptionScrollLabel_ != prompt.label;
+
+                    if (promptChanged) {
                         promptOptionScrollPx_ = 0;
                         promptOptionScrollType_ = prompt.type;
                         promptOptionScrollCount_ = static_cast<int>(prompt.options.size());
                         promptOptionScrollLabel_ = prompt.label;
+
+                        promptOptionWrapped_.clear();
+                        promptOptionColors_.clear();
+                        promptOptionHeights_.clear();
+                        promptOptionTotalHeight_ = 0.f;
+                        promptOptionWrapped_.reserve(prompt.options.size());
+                        promptOptionColors_.reserve(prompt.options.size());
+                        promptOptionHeights_.reserve(prompt.options.size());
+
+                        for (int i = 0; i < static_cast<int>(prompt.options.size()); ++i) {
+                            std::string optionLine;
+                            RaylibColor optionColor = TEXT_PRIMARY;
+                            if (prompt.type == GUIPromptType::SKILL_CARD) {
+                                optionLine = prompt.options[static_cast<size_t>(i)];
+                                optionColor = (i % 2 == 0) ? TEXT_PRIMARY : TEXT_MUTED;
+                            } else {
+                                optionLine = std::to_string(i + 1) + ". " + prompt.options[static_cast<size_t>(i)];
+                            }
+
+                            auto optionLines = gui::draw::wrapText(am, "regular", optionLine, 14.f, body.width - 14.f);
+                            if (optionLines.empty()) {
+                                optionLines.push_back(" ");
+                            }
+
+                            const float gapAfter =
+                                (prompt.type == GUIPromptType::SKILL_CARD && i % 2 == 1) ? 8.f : 4.f;
+                            const float entryHeight = static_cast<float>(optionLines.size()) * 16.f + gapAfter;
+                            promptOptionWrapped_.push_back(std::move(optionLines));
+                            promptOptionColors_.push_back(optionColor);
+                            promptOptionHeights_.push_back(entryHeight);
+                            promptOptionTotalHeight_ += entryHeight;
+                        }
                     }
 
                     const int maxScroll =
-                        std::max(0, static_cast<int>(std::ceil(totalContentHeight - listHeight)));
+                        std::max(0, static_cast<int>(std::ceil(promptOptionTotalHeight_ - listHeight)));
 
                     const Rectangle listRect{body.x, listTop, body.width, listHeight};
                     if (CheckCollisionPointRec(GetMousePosition(), listRect)) {
@@ -669,9 +848,9 @@ void GUIView::drawLeftPanel(const GameStateView& state, Rectangle summaryRect, R
                                      static_cast<int>(listRect.width),
                                      static_cast<int>(listRect.height));
                     float drawY = listTop - static_cast<float>(promptOptionScrollPx_);
-                    for (size_t i = 0; i < wrappedEntries.size(); ++i) {
-                        const auto& lines = wrappedEntries[i];
-                        const RaylibColor color = entryColors[i];
+                    for (size_t i = 0; i < promptOptionWrapped_.size(); ++i) {
+                        const auto& lines = promptOptionWrapped_[i];
+                        const RaylibColor color = promptOptionColors_[i];
 
                         for (const std::string& line : lines) {
                             DrawTextEx(am.font("regular"),
@@ -683,7 +862,7 @@ void GUIView::drawLeftPanel(const GameStateView& state, Rectangle summaryRect, R
                             drawY += 16.f;
                         }
 
-                        drawY += entryHeights[i] - static_cast<float>(lines.size()) * 16.f;
+                        drawY += promptOptionHeights_[i] - static_cast<float>(lines.size()) * 16.f;
                     }
                     EndScissorMode();
 
@@ -693,7 +872,7 @@ void GUIView::drawLeftPanel(const GameStateView& state, Rectangle summaryRect, R
                                              1.f,
                                              2,
                                              gui::menu::makeColor(255, 255, 255, 24));
-                        const float thumbH = std::max(24.f, listHeight * (listHeight / totalContentHeight));
+                        const float thumbH = std::max(24.f, listHeight * (listHeight / promptOptionTotalHeight_));
                         const float travel = std::max(0.f, listHeight - thumbH);
                         const float t = (maxScroll == 0)
                                             ? 0.f
@@ -749,6 +928,7 @@ void GUIView::drawLeftPanel(const GameStateView& state, Rectangle summaryRect, R
             const int playerIndex = displayOrder[static_cast<size_t>(orderIndex)];
             const auto& player = state.players[static_cast<size_t>(playerIndex)];
             const bool active = player.username == state.currentPlayerName;
+            const bool inspected = player.username == propertyPanelOwner_;
             const bool bankrupt = player.status == PlayerStatus::BANKRUPT;
             const RaylibColor playerColor =
                 gui::menu::setupPalette()[static_cast<size_t>(selectedPlayerColor(setup_, player.username, playerIndex))];
@@ -764,6 +944,15 @@ void GUIView::drawLeftPanel(const GameStateView& state, Rectangle summaryRect, R
                 DrawRectangleRec(
                     Rectangle{row.x, row.y, 5.f, row.height},
                     gui::menu::makeColor(playerColor.r, playerColor.g, playerColor.b, 220));
+            }
+
+            if (inspected) {
+                DrawRectangleLinesEx(row, 2.f, gui::menu::makeColor(0xff, 0xc1, 0x07, 200));
+                const std::string viewLabel = "Lihat";
+                const Vector2 viewSize = MeasureTextEx(am.font("regular"), viewLabel.c_str(), 12.f, 0.f);
+                DrawTextEx(am.font("regular"), viewLabel.c_str(),
+                           Vector2{row.x + row.width - viewSize.x - 10.f, row.y + row.height - 18.f},
+                           12.f, 0.f, gui::menu::makeColor(0xff, 0xc1, 0x07, 200));
             }
 
             const Vector2 markerCenter{row.x + 24.f, row.y + row.height * 0.5f};
@@ -1000,96 +1189,110 @@ void GUIView::drawPropertyPanel(const GameStateView& state, Rectangle rect) {
     const float cardH = std::min(138.f, body.height - 6.f);
     const float cardW = std::clamp(cardH * 0.76f, 108.f, 132.f);
     const float gap = 12.f;
-    const int maxVisible = std::max(1, static_cast<int>((body.width + gap) / (cardW + gap)));
-    const int visibleCount = std::min<int>(maxVisible, static_cast<int>(myProperties.size()));
+    const float totalContentW = static_cast<float>(myProperties.size()) * (cardW + gap) + gap;
 
-    float x = body.x;
-    for (int idx = 0; idx < visibleCount; ++idx) {
-        const auto* property = myProperties[static_cast<size_t>(idx)];
+    const int maxScroll = static_cast<int>(std::max(0.f, totalContentW - body.width));
+    if (CheckCollisionPointRec(GetMousePosition(), body)) {
+        const float wheel = GetMouseWheelMove();
+        if (wheel != 0.f) {
+            propertyPanelScrollPx_ -= static_cast<int>(wheel * 40.f);
+        }
+    }
+    propertyPanelScrollPx_ = std::clamp(propertyPanelScrollPx_, 0, maxScroll);
+
+    BeginScissorMode(static_cast<int>(body.x),
+                     static_cast<int>(body.y),
+                     static_cast<int>(body.width),
+                     static_cast<int>(body.height));
+
+    float x = body.x - static_cast<float>(propertyPanelScrollPx_);
+    for (size_t idx = 0; idx < myProperties.size(); ++idx) {
+        const auto* property = myProperties[idx];
         const Rectangle card{x, body.y, cardW, cardH};
-        gui::draw::drawPanel(card, SURFACE_ALT, gui::menu::makeColor(0x40, 0x55, 0x73));
+        if (x + cardW > body.x && x < body.x + body.width) {
+            gui::draw::drawPanel(card, SURFACE_ALT, gui::menu::makeColor(0x40, 0x55, 0x73));
 
-        ::Color group = ::Color::DEFAULT;
-        std::string tileName = property->name;
-        for (const auto& tile : state.tiles) {
-            if (tile.code == property->code) {
-                group = tile.color;
-                tileName = tile.name;
-                break;
+            ::Color group = ::Color::DEFAULT;
+            std::string tileName = property->name;
+            for (const auto& tile : state.tiles) {
+                if (tile.code == property->code) {
+                    group = tile.color;
+                    tileName = tile.name;
+                    break;
+                }
             }
-        }
 
-        const RaylibColor stripColor = gui::draw::tileColor(group);
-        if (group != ::Color::DEFAULT) {
-            DrawRectangleRec(Rectangle{card.x, card.y, card.width, 16.f}, stripColor);
-        }
+            const RaylibColor stripColor = gui::draw::tileColor(group);
+            if (group != ::Color::DEFAULT) {
+                DrawRectangleRec(Rectangle{card.x, card.y, card.width, 16.f}, stripColor);
+            }
 
-        DrawTextEx(am.font("bold"),
-                   property->code.c_str(),
-                   Vector2{card.x + 10.f, card.y + 26.f},
-                   26.f,
-                   0.f,
-                   group == ::Color::YELLOW ? gui::menu::makeColor(0x90, 0x87, 0x00)
-                                            : (group != ::Color::DEFAULT ? stripColor : TEXT_PRIMARY));
-
-        auto nameLines = gui::draw::wrapText(am, "regular", tileName, 14.f, card.width - 20.f);
-        float nameY = card.y + 58.f;
-        for (size_t lineIdx = 0; lineIdx < nameLines.size() && lineIdx < 2; ++lineIdx) {
-            DrawTextEx(am.font("regular"),
-                       nameLines[lineIdx].c_str(),
-                       Vector2{card.x + 10.f, nameY},
-                       14.f,
+            DrawTextEx(am.font("bold"),
+                       property->code.c_str(),
+                       Vector2{card.x + 10.f, card.y + 26.f},
+                       26.f,
                        0.f,
-                       TEXT_PRIMARY);
-            nameY += 14.f;
-        }
+                       group == ::Color::YELLOW ? gui::menu::makeColor(0x90, 0x87, 0x00)
+                                                : (group != ::Color::DEFAULT ? stripColor : TEXT_PRIMARY));
 
-        const int level = std::min(property->buildingLevel, 5);
-        if (level > 0) {
-            const float dotY = card.y + card.height - 18.f;
-            const float dotR = 3.6f;
-            const float startX = card.x + card.width * 0.5f - (level - 1) * dotR * 1.7f;
-            for (int d = 0; d < level; ++d) {
-                DrawCircleV(Vector2{startX + d * dotR * 3.4f, dotY},
-                            dotR,
-                            property->status == PropertyStatus::MORTGAGED
-                                ? gui::menu::makeColor(150, 150, 150)
-                                : TEXT_GREEN);
+            auto nameLines = gui::draw::wrapText(am, "regular", tileName, 14.f, card.width - 20.f);
+            float nameY = card.y + 58.f;
+            for (size_t lineIdx = 0; lineIdx < nameLines.size() && lineIdx < 2; ++lineIdx) {
+                DrawTextEx(am.font("regular"),
+                           nameLines[lineIdx].c_str(),
+                           Vector2{card.x + 10.f, nameY},
+                           14.f,
+                           0.f,
+                           TEXT_PRIMARY);
+                nameY += 14.f;
+            }
+
+            const int level = std::min(property->buildingLevel, 5);
+            if (level > 0) {
+                const float dotY = card.y + card.height - 18.f;
+                const float dotR = 3.6f;
+                const float startX = card.x + card.width * 0.5f - (level - 1) * dotR * 1.7f;
+                for (int d = 0; d < level; ++d) {
+                    DrawCircleV(Vector2{startX + d * dotR * 3.4f, dotY},
+                                dotR,
+                                property->status == PropertyStatus::MORTGAGED
+                                    ? gui::menu::makeColor(150, 150, 150)
+                                    : TEXT_GREEN);
+                }
+            }
+
+            if (property->status == PropertyStatus::MORTGAGED) {
+                const Rectangle mortRect{card.x + card.width - 56.f, card.y + 24.f, 44.f, 20.f};
+                gui::draw::drawPanel(mortRect,
+                                     gui::menu::makeColor(0xff, 0x4d, 0x4d, 28),
+                                     gui::menu::makeColor(0xff, 0x4d, 0x4d, 110));
+                drawTextCentered(am.font("bold"), "MRTG", 12.f, gui::menu::makeColor(0xff, 0xc4, 0xc4), mortRect);
+            }
+
+            if (property->festivalTurnsRemaining > 0) {
+                const Rectangle festRect{card.x + 8.f, card.y + card.height - 30.f, card.width - 16.f, 18.f};
+                gui::draw::drawPanel(festRect,
+                                     gui::menu::makeColor(0xff, 0xd4, 0x66, 24),
+                                     gui::menu::makeColor(0xff, 0xd4, 0x66, 90));
+                const std::string festLabel = "FEST x" + std::to_string(property->festivalMultiplier) +
+                                              " (" + std::to_string(property->festivalTurnsRemaining) + "t)";
+                drawTextCentered(am.font("bold"), festLabel, 11.f, gui::menu::makeColor(0xff, 0xe8, 0xb0), festRect);
             }
         }
-
-        if (property->status == PropertyStatus::MORTGAGED) {
-            const Rectangle mortRect{card.x + card.width - 56.f, card.y + 24.f, 44.f, 20.f};
-            gui::draw::drawPanel(mortRect,
-                                 gui::menu::makeColor(0xff, 0x4d, 0x4d, 28),
-                                 gui::menu::makeColor(0xff, 0x4d, 0x4d, 110));
-            drawTextCentered(am.font("bold"), "MRTG", 12.f, gui::menu::makeColor(0xff, 0xc4, 0xc4), mortRect);
-        }
-
-        if (property->festivalTurnsRemaining > 0) {
-            const Rectangle festRect{card.x + 8.f, card.y + card.height - 30.f, card.width - 16.f, 18.f};
-            gui::draw::drawPanel(festRect,
-                                 gui::menu::makeColor(0xff, 0xd4, 0x66, 24),
-                                 gui::menu::makeColor(0xff, 0xd4, 0x66, 90));
-            const std::string festLabel = "FEST x" + std::to_string(property->festivalMultiplier) +
-                                          " (" + std::to_string(property->festivalTurnsRemaining) + "t)";
-            drawTextCentered(am.font("bold"), festLabel, 11.f, gui::menu::makeColor(0xff, 0xe8, 0xb0), festRect);
-        }
-
         x += cardW + gap;
     }
 
-    const int hiddenCount = static_cast<int>(myProperties.size()) - visibleCount;
-    if (hiddenCount > 0) {
-        const Rectangle moreRect{x, body.y + cardH * 0.5f - 22.f, 92.f, 44.f};
-        gui::draw::drawPanel(moreRect,
-                             gui::menu::makeColor(255, 255, 255, 12),
-                             gui::menu::makeColor(255, 255, 255, 30));
-        drawTextCentered(am.font("bold"),
-                         "+" + std::to_string(hiddenCount) + " lagi",
-                         16.f,
-                         TEXT_PRIMARY,
-                         moreRect);
+    EndScissorMode();
+
+    if (maxScroll > 0) {
+        const float trackY = body.y + body.height - 4.f;
+        DrawRectangleRounded(Rectangle{body.x, trackY, body.width, 3.f},
+                             1.f, 2, gui::menu::makeColor(255, 255, 255, 24));
+        const float thumbW = std::max(24.f, body.width * (body.width / totalContentW));
+        const float travel = std::max(0.f, body.width - thumbW);
+        const float t = (maxScroll == 0) ? 0.f : static_cast<float>(propertyPanelScrollPx_) / static_cast<float>(maxScroll);
+        DrawRectangleRounded(Rectangle{body.x + travel * t, trackY, thumbW, 3.f},
+                             1.f, 2, gui::menu::makeColor(0x7d, 0xb4, 0xec, 220));
     }
 #else
     (void)state;
@@ -1256,7 +1459,7 @@ void GUIView::renderPromptOverlay(const GUIPromptState& prompt) {
     if (prompt.type == GUIPromptType::MENU_CHOICE) {
         float optionY = contentY;
         for (int i = 0; i < static_cast<int>(prompt.options.size()); ++i) {
-            const std::string line = std::to_string(i) + ". " + prompt.options[static_cast<size_t>(i)];
+            const std::string line = std::to_string(i + 1) + ". " + prompt.options[static_cast<size_t>(i)];
             drawTextCentered(am.font("regular"),
                              line,
                              bodySize,
@@ -1330,6 +1533,27 @@ void GUIView::handleInGameClick(float mx, float my, std::string& outCommand, con
             outCommand = "DADU";
         }
         return;
+    }
+
+    if (inspectedTileIndex_ >= 0) {
+        const float panelW = std::min(W * 0.70f, 760.f);
+        const float panelH = std::min(H * 0.55f, 460.f);
+        const Rectangle panel = gui::draw::centeredRect(W * 0.5f, H * 0.5f, panelW, panelH);
+        if (!CheckCollisionPointRec(Vector2{mx, my}, panel)) {
+            inspectedTileIndex_ = -1;
+            return;
+        }
+    }
+
+    if (CheckCollisionPointRec(Vector2{mx, my}, layout.boardBounds)) {
+        const int totalTiles = static_cast<int>(state.tiles.size());
+        for (int i = 0; i < totalTiles; ++i) {
+            const Rectangle tileBounds = gui::tile::boardTileBounds(i, layout.boardBounds, totalTiles);
+            if (CheckCollisionPointRec(Vector2{mx, my}, tileBounds)) {
+                inspectedTileIndex_ = i;
+                return;
+            }
+        }
     }
 
     const Rectangle playersBody = panelBodyRect(layout.playersPanel, 56.f, 14.f);

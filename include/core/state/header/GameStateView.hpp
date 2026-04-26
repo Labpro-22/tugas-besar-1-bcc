@@ -41,6 +41,7 @@ public:
 	bool getHasRolledDice() const;
 	bool getHasUsedSkillCard() const;
 	bool getExtraRollAvailable() const;
+	const PlayerView* getActivePlayer() const;
 
 	std::string render(const GameState& state) const;
 };

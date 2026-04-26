@@ -65,7 +65,7 @@ public:
         const string& playerName, int currentBid, int playerMoney) override;
 
     TaxChoice getTaxChoice() override;
-    int       getLiquidationChoice(int numOptions) override;
+    int       getLiquidationChoice(const LiquidationState& liquidationState) override;
     int       getSkillCardChoice(const vector<CardInfo>& cards) override;
     string    getPropertyCodeInput(const string& prompt) override;
 

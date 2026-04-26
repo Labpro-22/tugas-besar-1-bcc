@@ -125,7 +125,11 @@ bool GUIInput::updatePrompt() {
         return false;
     }
 
-    if (prompt_.type == GUIPromptType::DICE_MANUAL && IsKeyPressed(KEY_ESCAPE)) {
+    if ((prompt_.type == GUIPromptType::DICE_MANUAL ||
+         prompt_.type == GUIPromptType::MENU_CHOICE ||
+         prompt_.type == GUIPromptType::LIQUIDATION ||
+         prompt_.type == GUIPromptType::SKILL_CARD) &&
+        IsKeyPressed(KEY_ESCAPE)) {
         prompt_.cancelled = true;
         prompt_.resolved = true;
         return true;
@@ -143,6 +147,11 @@ bool GUIInput::updatePrompt() {
             const int key = KEY_ZERO + digit;
             const int keypad = KEY_KP_0 + digit;
             if (IsKeyPressed(key) || IsKeyPressed(keypad)) {
+                if (prompt_.type == GUIPromptType::MENU_CHOICE && digit == 0) {
+                    prompt_.cancelled = true;
+                    prompt_.resolved = true;
+                    return true;
+                }
                 if (digit >= prompt_.minVal && digit <= prompt_.maxVal) {
                     prompt_.textBuffer = std::to_string(digit);
                     confirmPrompt();
@@ -207,7 +216,7 @@ string GUIInput::getCommand() {
 }
 
 int GUIInput::getMenuChoice(const vector<string>& options) {
-    activatePrompt(GUIPromptType::MENU_CHOICE, "Pilih opsi", 0, static_cast<int>(options.size()), options);
+    activatePrompt(GUIPromptType::MENU_CHOICE, "Pilih opsi", 1, static_cast<int>(options.size()), options);
     waitForResolution();
     return prompt_.resInt;
 }
@@ -254,11 +263,20 @@ TaxChoice GUIInput::getTaxChoice() {
     return (prompt_.resInt == 1) ? TaxChoice::FLAT : TaxChoice::PERCENTAGE;
 }
 
-int GUIInput::getLiquidationChoice(int numOptions) {
+int GUIInput::getLiquidationChoice(const LiquidationState& liquidationState) {
+    vector<string> options;
+    options.reserve(liquidationState.options.size());
+    for (const LiquidationOption& option : liquidationState.options) {
+        const string action = option.type == LiquidationType::SELL ? "JUAL" : "GADAI";
+        options.push_back(action + " " + option.name + " (" + option.code + ") - " +
+                          option.description + " - nilai " + option.value.toString());
+    }
+
     activatePrompt(GUIPromptType::LIQUIDATION,
                    "Likuidasi - pilih aksi (0 = selesai)",
                    0,
-                   numOptions);
+                   static_cast<int>(liquidationState.options.size()),
+                   options);
     waitForResolution();
     return prompt_.resInt;
 }
