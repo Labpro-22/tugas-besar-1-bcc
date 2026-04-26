@@ -1,6 +1,8 @@
 #pragma once
 
 #if NIMONSPOLY_ENABLE_RAYLIB
+#include <cmath>
+
 #define Color RaylibColor
 #include <raylib.h>
 #undef Color
@@ -29,4 +31,15 @@
 inline constexpr RaylibColor RL_WHITE{255, 255, 255, 255};
 inline constexpr RaylibColor RL_BLACK{0, 0, 0, 255};
 inline constexpr RaylibColor RL_BLANK{0, 0, 0, 0};
+
+inline void DrawCircleGradientCompat(Vector2 center,
+                                     float radius,
+                                     RaylibColor inner,
+                                     RaylibColor outer) {
+    DrawCircleGradient(static_cast<int>(std::lround(center.x)),
+                       static_cast<int>(std::lround(center.y)),
+                       radius,
+                       inner,
+                       outer);
+}
 #endif

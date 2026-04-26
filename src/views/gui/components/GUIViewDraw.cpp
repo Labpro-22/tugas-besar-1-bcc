@@ -64,8 +64,8 @@ void drawGlobeBackground(int screenW, int screenH) {
     const float cy = static_cast<float>(screenH) * 0.5f;
     const float r = std::min(screenW, screenH) * 0.44f;
 
-    DrawCircleGradient(Vector2{cx, cy}, r * 1.35f,
-                       makeColor(100, 160, 255, 18), RL_BLANK);
+    DrawCircleGradientCompat(Vector2{cx, cy}, r * 1.35f,
+                             makeColor(100, 160, 255, 18), RL_BLANK);
     DrawCircleV(Vector2{cx, cy}, r, makeColor(0x0d, 0x18, 0x2e));
     DrawCircleLinesV(Vector2{cx, cy}, r, makeColor(100, 160, 255, 80));
     DrawCircleLinesV(Vector2{cx, cy}, r * 0.92f, makeColor(120, 180, 255, 40));
@@ -73,9 +73,9 @@ void drawGlobeBackground(int screenW, int screenH) {
 
 void drawGameBackground(int screenW, int screenH) {
     DrawRectangleGradientV(0, 0, screenW, screenH, makeColor(0xd8, 0xde, 0xe6), makeColor(0xc7, 0xcf, 0xda));
-    DrawCircleGradient(Vector2{screenW * 0.52f, screenH * 0.46f},
-                       std::min(screenW, screenH) * 0.42f,
-                       makeColor(255, 255, 255, 55), RL_BLANK);
+    DrawCircleGradientCompat(Vector2{screenW * 0.52f, screenH * 0.46f},
+                             std::min(screenW, screenH) * 0.42f,
+                             makeColor(255, 255, 255, 55), RL_BLANK);
 }
 
 void drawCenteredText(AssetManager& am,
