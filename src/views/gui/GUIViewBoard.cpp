@@ -271,11 +271,11 @@ void GUIView::showBoard(const GameStateView& state) {
     DrawRectangleGradientV(0, 0, static_cast<int>(W), static_cast<int>(H),
                            gui::menu::makeColor(0x10, 0x14, 0x1e),
                            gui::menu::makeColor(0x06, 0x09, 0x12));
-    DrawCircleGradient({W * 0.50f, H * 0.18f},
+    DrawCircleGradient(static_cast<int>(W * 0.50f), static_cast<int>(H * 0.18f),
                        std::min(W, H) * 0.26f,
                        gui::menu::makeColor(0x5c, 0xd6, 0xff, 22),
                        RL_BLANK);
-    DrawCircleGradient({W * 0.72f, H * 0.68f},
+    DrawCircleGradient(static_cast<int>(W * 0.72f), static_cast<int>(H * 0.68f),
                        std::min(W, H) * 0.18f,
                        gui::menu::makeColor(0xff, 0xc1, 0x07, 12),
                        RL_BLANK);
