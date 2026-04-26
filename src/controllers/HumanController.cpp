@@ -29,8 +29,18 @@ int HumanController::decideSkillCard(const vector<CardInfo>& cards) {
 }
 
 string HumanController::decideFestivalProperty(const vector<PropertyInfo>& props) {
-    (void)props;
-    return input->getPropertyCodeInput("Masukkan kode properti");
+    if (props.empty()) {
+        return "";
+    }
+    vector<string> options;
+    for (const auto& prop : props) {
+        options.push_back(prop.code + " - " + prop.name);
+    }
+    int choice = input->getMenuChoice(options);
+    if (choice > 0 && choice <= static_cast<int>(props.size())) {
+        return props[static_cast<size_t>(choice - 1)].code;
+    }
+    return "";
 }
 
 int HumanController::decideBuild(const BuildMenuState& state) {
@@ -42,7 +52,7 @@ int HumanController::decideBuild(const BuildMenuState& state) {
 }
 
 int HumanController::decideLiquidation(const LiquidationState& state) {
-    return input->getLiquidationChoice(static_cast<int>(state.options.size()));
+    return input->getLiquidationChoice(state);
 }
 
 int HumanController::decideDropCard(const vector<CardInfo>& cards) {

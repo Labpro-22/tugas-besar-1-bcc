@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <map>
 #include <iostream>
 #include <memory>
 #include <random>
@@ -15,6 +16,7 @@
 #include "controllers/HumanController.hpp"
 #include "models/Money.hpp"
 #include "models/Player.hpp"
+#include "tile/header/StreetTile.hpp"
 #include "ui/AppScreen.hpp"
 #include "ui/AssetManager.hpp"
 #include "ui/GUIInput.hpp"
@@ -247,9 +249,76 @@ int GameApp::run() {
                     }
                     pendingCommand.clear();
                 } else if (pendingCommand == "BANGUN") {
-                    std::string code = input.getPropertyCodeInput("Kode properti untuk bangun");
-                    if (!code.empty()) {
-                        engine.processCommand("bangun " + code, *active);
+                    bool hasCompleteGroup = false;
+                    for (PropertyTile* prop : active->getProperties()) {
+                        if (auto* street = dynamic_cast<StreetTile*>(prop)) {
+                            if (street->isMonopolyComplete()) {
+                                hasCompleteGroup = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (!hasCompleteGroup) {
+                        engine.getTransactionLogger().log(
+                            engine.getState().getCurrentTurn(),
+                            active->getUsername(),
+                            "BANGUN",
+                            "Tidak ada color group lengkap. Tidak bisa bangun."
+                        );
+                        view.showSaveLoadStatus("Tidak ada color group lengkap. Tidak bisa bangun.");
+                        pendingCommand.clear();
+                        continue;
+                    }
+
+                    BuildMenuState menu = engine.getBoard().getBuildMenuState(*active);
+                    if (menu.groups.empty()) {
+                        engine.getTransactionLogger().log(
+                            engine.getState().getCurrentTurn(),
+                            active->getUsername(),
+                            "BANGUN",
+                            "Tidak ada properti yang memenuhi syarat untuk dibangun."
+                        );
+                        view.showSaveLoadStatus("Tidak ada properti yang memenuhi syarat untuk dibangun.");
+                        pendingCommand.clear();
+                        continue;
+                    }
+
+                    std::vector<std::string> groupOptions;
+                    for (const ColorGroupBuildOption& group : menu.groups) {
+                        std::string line = "[" + group.colorName + "] ";
+                        for (size_t i = 0; i < group.tiles.size(); ++i) {
+                            if (i > 0) line += " | ";
+                            const TileBuildOption& tile = group.tiles[i];
+                            line += tile.name + " (" + tile.code + "): " +
+                                    std::to_string(tile.currentLevel) +
+                                    (tile.currentLevel >= 4 ? " hotel" : " rumah") +
+                                    " (Harga: M" + std::to_string(tile.buildCost) + ")";
+                        }
+                        groupOptions.push_back(line);
+                    }
+                    groupOptions.push_back("Uang kamu saat ini: " + active->getMoney().toString());
+                    const int groupChoice = input.getMenuChoice(groupOptions);
+                    if (groupChoice <= 0 || groupChoice > static_cast<int>(menu.groups.size())) {
+                        pendingCommand.clear();
+                        continue;
+                    }
+
+                    const ColorGroupBuildOption& selectedGroup = menu.groups[static_cast<size_t>(groupChoice - 1)];
+                    if (selectedGroup.tiles.empty()) {
+                        pendingCommand.clear();
+                        continue;
+                    }
+                    std::vector<std::string> streetOptions;
+                    for (const TileBuildOption& tile : selectedGroup.tiles) {
+                        streetOptions.push_back(tile.name + " (" + tile.code + ")" +
+                                              ": " + std::to_string(tile.currentLevel) +
+                                              (tile.currentLevel >= 4 ? " hotel" : " rumah") +
+                                              " <- dapat dibangun");
+                    }
+
+                    const int streetChoice = input.getMenuChoice(streetOptions);
+                    if (streetChoice > 0 && streetChoice <= static_cast<int>(selectedGroup.tiles.size())) {
+                        engine.processCommand("bangun " + selectedGroup.tiles[static_cast<size_t>(streetChoice - 1)].code, *active);
                     }
                     pendingCommand.clear();
                 } else if (pendingCommand == "GADAI") {
