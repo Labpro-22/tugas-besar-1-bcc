@@ -40,6 +40,7 @@ public:
     int destinationIndex{-1};
     bool movedPlayer{false};
     bool resolveLanding{false};
+    Player* resolveLandingTarget{nullptr};
     bool requiresTargetSelection{false};
     bool consumesCard{true};
 

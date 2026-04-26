@@ -32,6 +32,16 @@ class CardSystem {
         void initializeDecks();
         static CardResult applyImmediateResult(Player& player, GameContext& context, const CardResult& result);
 
+        struct UseOutcome {
+            bool success = false;
+            bool resolveLanding = false;
+            Player* resolveLandingTarget = nullptr;
+            std::string message;
+        };
+
+        UseOutcome useSkillCard(Player& player, int cardIndex, GameContext& context,
+                                bool hasRolledDice, bool extraRollAvailable, bool hasUsedSkillCard);
+
         CardDeck<ChanceCard>& getChanceDeck();
         const CardDeck<ChanceCard>& getChanceDeck() const;
         CardDeck<CommunityChestCard>& getCommunityChestDeck();

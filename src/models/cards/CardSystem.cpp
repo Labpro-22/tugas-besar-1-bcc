@@ -7,6 +7,9 @@
 
 #include "core/Bank.hpp"
 #include "core/config/header/GameConfig.hpp"
+#include "core/log/header/TransactionLogger.hpp"
+#include "core/state/header/GameState.hpp"
+#include "controllers/PlayerController.hpp"
 #include "models/Player.hpp"
 #include "models/board/header/Board.hpp"
 #include "models/effects/DiscountEffect.hpp"
@@ -26,6 +29,7 @@
 #include "tile/header/PropertyTile.hpp"
 #include "tile/header/StreetTile.hpp"
 #include "tile/header/Tile.hpp"
+#include "utils/GameUtils.hpp"
 #include "utils/Types.hpp"
 
 namespace {
@@ -208,7 +212,8 @@ namespace {
         targetPlayer->setPosition(player.getPosition());
         applied.targetPlayer = targetPlayer;
         applied.movedPlayer = true;
-        applied.resolveLanding = false;
+        applied.resolveLanding = true;
+        applied.resolveLandingTarget = targetPlayer;
         return applied;
     }
 
@@ -299,6 +304,75 @@ void CardSystem::initializeDecks() {
     chanceDeck.shuffle();
     communityChestDeck.shuffle();
     skillDeck.shuffle();
+}
+
+CardSystem::UseOutcome CardSystem::useSkillCard(Player& player, int cardIndex, GameContext& context,
+                                                bool hasRolledDice, bool extraRollAvailable, bool hasUsedSkillCard) {
+    UseOutcome outcome;
+    if (hasRolledDice) {
+        std::cout << "Kartu kemampuan hanya bisa digunakan sebelum lempar dadu.\n";
+        return outcome;
+    }
+    if (extraRollAvailable) {
+        std::cout << "Bonus lempar harus diselesaikan dulu sebelum pakai kartu kemampuan.\n";
+        return outcome;
+    }
+    if (hasUsedSkillCard) {
+        std::cout << "Sudah menggunakan kartu kemampuan pada giliran ini.\n";
+        return outcome;
+    }
+
+    std::unique_ptr<SkillCard> card(player.removeSkillCard(cardIndex));
+    if (!card) {
+        std::cout << "Nomor kartu tidak valid.\n";
+        return outcome;
+    }
+
+    CardResult result = card->activate(player, context);
+    if (result.action == CardResultAction::TELEPORT) {
+        std::string code = player.getController() ? player.getController()->decideTeleportTarget() : "";
+        Tile* tile = context.board.getTileByCode(normalizeCode(code));
+        result.destinationIndex = tile ? tile->getId() : -1;
+    } else if (result.action == CardResultAction::LASSO) {
+        std::vector<std::string> names;
+        for (Player* other : context.players) {
+            if (other && other != &player && !other->isBankrupt()) names.push_back(other->getUsername());
+        }
+        std::string target = player.getController() ? player.getController()->decideLassoTarget(names) : "";
+        for (Player* other : context.players) {
+            if (other && other->getUsername() == target) result.targetPlayer = other;
+        }
+    } else if (result.action == CardResultAction::DEMOLISH_PROPERTY) {
+        std::vector<PropertyInfo> candidates;
+        for (Player* other : context.players) {
+            if (!other || other == &player) continue;
+            for (PropertyTile* property : other->getProperties()) {
+                if (property) candidates.push_back(property->toInfo());
+            }
+        }
+        std::string code = player.getController() ? player.getController()->decideDemolitionTarget(candidates) : "";
+        result.targetProperty = context.board.getPropertyByCode(normalizeCode(code));
+    }
+
+    CardResult applied = applyImmediateResult(player, context, result);
+    if (!applied.success) {
+        std::cout << applied.message << "\n";
+        player.addSkillCard(card.release());
+        return outcome;
+    }
+
+    player.setHasUsedSkillCardThisTurn(true);
+    if (context.gameState) {
+        context.gameState->setHasUsedSkillCard(true);
+    }
+    discardSkill(std::move(card));
+    context.logger.log(context.currentTurn, player.getUsername(), "KARTU",
+        result.message.empty() ? "Menggunakan kartu kemampuan" : result.message);
+    outcome.success = true;
+    outcome.resolveLanding = applied.resolveLanding;
+    outcome.resolveLandingTarget = applied.resolveLandingTarget;
+    outcome.message = result.message;
+    return outcome;
 }
 
 CardResult CardSystem::applyImmediateResult(Player& player, GameContext& context, const CardResult& result) {
